@@ -56,5 +56,26 @@ describe('Sweet Service', () => {
         }).toThrow('Invalid password');
     });
 
+    test('should search sweets by partial name (case-insensitive)', () => {
+        service.addSweet({ id: 2007, name: 'Mango Barfi', category: 'Fruit-Based', price: 40, quantity: 10 });
+
+        const results = service.searchSweets({ name: 'mango' });
+        expect(results.length).toBe(1);
+        expect(results[0].name).toBe('Mango Barfi');
+    });
+
+    test('should search sweets by category', () => {
+        service.addSweet({ id: 2008, name: 'Badam Halwa', category: 'Nut-Based', price: 60, quantity: 5 });
+
+        const results = service.searchSweets({ category: 'Nut-Based' });
+        expect(results.find(s => s.id === 2008)).toBeDefined();
+    });
+
+    test('should search sweets by price range', () => {
+        service.addSweet({ id: 2009, name: 'Cheap Sweet', category: 'Simple', price: 15, quantity: 10 });
+
+        const results = service.searchSweets({ minPrice: 10, maxPrice: 20 });
+        expect(results.find(s => s.id === 2009)).toBeDefined();
+    });
 
 });
