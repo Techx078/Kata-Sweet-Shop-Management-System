@@ -17,9 +17,16 @@ function addSweet(sweet) {
 function getAllSweets() {
   return sweets;
 }
+function deleteSweet(id) {
+  const index = sweets.findIndex(s => s.id === id);
+  if (index !== -1) {
+    sweets.splice(index, 1);
+  }
+}
 
 module.exports = {
   reset,
   addSweet,
-  getAllSweets
+  getAllSweets,
+  deleteSweet
 };
