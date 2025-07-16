@@ -25,7 +25,7 @@ app.get('/', (req, res) => {
     sweets = service.getAllSweets();
   }
 
-  res.render('index', { sweets, error: null });
+  res.render('index', { sweets, categories: ['Nut-Based', 'Fruit-Based', 'Milk-Based', 'Sugar-Based', 'Others'],error: null });
 });
 
 // Add sweet (from form)
@@ -56,7 +56,7 @@ app.post('/delete/:id', (req, res) => {
     error = err.message;
   }
   const sweets = service.getAllSweets();
-  res.render('index', { sweets, error });
+  res.render('index', { sweets,categories: ['Nut-Based', 'Fruit-Based', 'Milk-Based', 'Sugar-Based', 'Others'], error });
 });
 
 // Purchase sweet
@@ -69,7 +69,7 @@ app.post('/purchase/:id', (req, res) => {
     error = err.message;
   }
   const sweets = service.getAllSweets();
-  res.render('index', { sweets, error });
+  res.render('index', { sweets,categories: ['Nut-Based', 'Fruit-Based', 'Milk-Based', 'Sugar-Based', 'Others'], error });
 });
 
 // Restock sweet
@@ -84,7 +84,7 @@ app.post('/restock/:id', (req, res) => {
     error = err.message;
   }
   const sweets = service.getAllSweets();
-  res.render('index', { sweets, error });
+  res.render('index', { sweets,categories: ['Nut-Based', 'Fruit-Based', 'Milk-Based', 'Sugar-Based', 'Others'], error });
 });
 
 app.listen(PORT, () => {
