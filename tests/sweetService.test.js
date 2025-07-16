@@ -37,5 +37,24 @@ describe('Sweet Service', () => {
             service.purchaseSweet(2004, 5);
         }).toThrow('Not enough stock');
     });
+    test('should restock sweet and increase quantity with correct password', () => {
+        const sweet = { id: 2005, name: 'Restock Me', category: 'Test', price: 25, quantity: 5 };
+        service.addSweet(sweet);
+
+        service.restockSweet(2005, 10, 'secret123'); // correct password
+
+        const updated = service.getAllSweets().find(s => s.id === 2005);
+        expect(updated.quantity).toBe(15); // 5 + 10
+    });
+
+    test('should throw error when restock with wrong password', () => {
+        const sweet = { id: 2006, name: 'No Restock', category: 'Test', price: 25, quantity: 5 };
+        service.addSweet(sweet);
+
+        expect(() => {
+            service.restockSweet(2006, 10, 'wrongpass');
+        }).toThrow('Invalid password');
+    });
+
 
 });
