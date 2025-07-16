@@ -17,7 +17,9 @@ function addSweet(sweet) {
 function getAllSweets() {
   return sweets;
 }
-function deleteSweet(id) {
+const deletePassword = 'delete123';
+function deleteSweet(id,password) {
+  if (password !== deletePassword) throw new Error('Invalid password');
   const index = sweets.findIndex(s => s.id === id);
   if (index !== -1) {
     sweets.splice(index, 1);
@@ -30,7 +32,7 @@ function purchaseSweet(id, qty) {
   sweet.quantity -= qty;
   return sweet;
 }
-const restockPassword = 'secret123';
+const restockPassword = 'restock123';
 
 function restockSweet(id, qty, password) {
   if (password !== restockPassword) throw new Error('Invalid password');

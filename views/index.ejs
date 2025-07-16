@@ -2,26 +2,22 @@
 <html>
 <head>
   <title>Sweet Inventory</title>
-  <style>
-    body { font-family: Arial; background: #f7f7f7; padding: 20px; }
-    h1 { color: #2c3e50; text-align: center; }
-    form { margin: 10px 0; }
-    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-    .card { background: #fff; padding: 10px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-    .card h3 { margin: 0 0 5px; }
-    .card form { display: inline; }
-    input[type="number"], input[type="text"], input[type="password"] { width: 80px; }
-    button { margin: 2px; }
-  </style>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <h1>Sweet Inventory</h1>
 
   <h2>Add New Sweet</h2>
   <form method="POST" action="/add">
-    <input type="number" name="id" placeholder="ID" required>
     <input type="text" name="name" placeholder="Name" required>
-    <input type="text" name="category" placeholder="Category" required>
+    <select name="category" required>
+      <option value="">-- Select Category --</option>
+      <option value="Nut-Based">Nut-Based</option>
+      <option value="Fruit-Based">Fruit-Based</option>
+      <option value="Milk-Based">Milk-Based</option>
+      <option value="Sugar-Based">Sugar-Based</option>
+      <option value="Others">Others</option>
+    </select>
     <input type="number" name="price" placeholder="Price" required>
     <input type="number" name="quantity" placeholder="Qty" required>
     <button type="submit">Add</button>
@@ -30,7 +26,14 @@
   <h2>Search Sweets</h2>
   <form method="GET" action="/">
     <input type="text" name="name" placeholder="Name">
-    <input type="text" name="category" placeholder="Category">
+    <select name="category" required>
+      <option value="">-- Select Category --</option>
+      <option value="Nut-Based">Nut-Based</option>
+      <option value="Fruit-Based">Fruit-Based</option>
+      <option value="Milk-Based">Milk-Based</option>
+      <option value="Sugar-Based">Sugar-Based</option>
+      <option value="Others">Others</option>
+    </select>
     <input type="number" name="minPrice" placeholder="Min Price">
     <input type="number" name="maxPrice" placeholder="Max Price">
     <button type="submit">Search</button>
@@ -40,27 +43,73 @@
   <div class="card-grid">
     <% sweets.forEach(sweet => { %>
       <div class="card">
+        <h3><%= sweet.id %></h3>
         <h3><%= sweet.name %></h3>
         <p>Category: <%= sweet.category %></p>
         <p>Price: ₹<%= sweet.price %></p>
         <p>Quantity: <%= sweet.quantity %></p>
-
-        <form method="POST" action="/delete/<%= sweet.id %>">
-          <button type="submit">Delete</button>
-        </form>
-
-        <form method="POST" action="/purchase/<%= sweet.id %>">
-          <input type="number" name="quantity" placeholder="Qty" required>
-          <button type="submit">Purchase</button>
-        </form>
-
-        <form method="POST" action="/restock/<%= sweet.id %>">
-          <input type="number" name="quantity" placeholder="Qty" required>
-          <input type="password" name="password" placeholder="Password" required>
-          <button type="submit">Restock</button>
-        </form>
+        <button onclick="purchaseSweet(<%= sweet.id %>, <%= sweet.quantity %>)">Purchase</button>
+        <button onclick="restockSweet(<%= sweet.id %>)">Restock</button>
+        <button onclick="deleteSweet(<%= sweet.id %>)">Delete</button>
       </div>
     <% }) %>
   </div>
+
+  <script>
+    function purchaseSweet(id, availableQty) {
+      const qty = prompt('Enter quantity to purchase:');
+      if (!qty) return;
+
+      if (parseInt(qty) > availableQty) {
+        alert("Not enough stock. Available quantity: " + availableQty);
+        return;
+      }
+
+      fetch(`/purchase/${id}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: `quantity=${encodeURIComponent(qty)}`
+      }).then(() => window.location.reload());
+    }
+
+    function restockSweet(id) {
+      const qty = prompt('Enter quantity to restock:');
+      const password = prompt('Enter restock password:');
+      if( password != "restock123" ) {
+        alert("Invalid password");
+        return;
+      }
+      if (qty && password) {
+        fetch(`/restock/${id}`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+          body: `quantity=${encodeURIComponent(qty)}&password=${encodeURIComponent(password)}`
+        }).then(() => window.location.reload());
+      }
+    }
+
+    function deleteSweet(id) {
+      const password = prompt('Enter delete password:');
+      if( password != "delete123" ) {
+        alert("Invalid password");
+        return;
+      }
+      if (confirm('Are you sure you want to delete this sweet?')) {
+        fetch(`/delete/${id}`, { 
+          method: 'POST' ,
+          headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+          body: `password=${encodeURIComponent(password)}`
+        })
+          .then(() => window.location.reload());
+      }
+    }
+    
+  </script>
+  <script>
+  <% if (typeof error !== 'undefined' && error) { %>
+    alert("<%= error %>");
+  <% } %>
+</script>
+
 </body>
 </html>
