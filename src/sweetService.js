@@ -41,6 +41,15 @@ function restockSweet(id, qty, password) {
   sweet.quantity += qty;
   return sweet;
 }
+function searchSweets({ name, category, minPrice, maxPrice }) {
+  return sweets.filter(s => {
+    if (name && !s.name.toLowerCase().includes(name.toLowerCase())) return false;
+    if (category && s.category !== category) return false;
+    if (minPrice !== undefined && s.price < minPrice) return false;
+    if (maxPrice !== undefined && s.price > maxPrice) return false;
+    return true;
+  });
+}
 
 module.exports = {
   reset,
@@ -48,5 +57,6 @@ module.exports = {
   getAllSweets,
   deleteSweet,
   purchaseSweet,
-  restockSweet
+  restockSweet,
+  searchSweets
 };
