@@ -30,11 +30,23 @@ function purchaseSweet(id, qty) {
   sweet.quantity -= qty;
   return sweet;
 }
+const restockPassword = 'secret123';
+
+function restockSweet(id, qty, password) {
+  if (password !== restockPassword) throw new Error('Invalid password');
+
+  const sweet = sweets.find(s => s.id === id);
+  if (!sweet) throw new Error('Sweet not found');
+
+  sweet.quantity += qty;
+  return sweet;
+}
 
 module.exports = {
   reset,
   addSweet,
   getAllSweets,
   deleteSweet,
-  purchaseSweet
+  purchaseSweet,
+  restockSweet
 };
