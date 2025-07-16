@@ -116,7 +116,7 @@ describe('Sweet Service', () => {
     expect(results.length).toBe(1);
     expect(results[0].id).toBe(1015);
   });
-
+  //for empty search
   test('should handle empty search (return all sweets)', () => {
     service.addSweet({ id: 1016, name: 'Sweet 1', category: 'Nut-Based', price: 10, quantity: 2 });
     service.addSweet({ id: 1017, name: 'Sweet 2', category: 'Others', price: 20, quantity: 3 });

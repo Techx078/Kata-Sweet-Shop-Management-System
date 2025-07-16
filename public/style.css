@@ -29,7 +29,7 @@ h1, h2 {
   box-shadow: 0 8px 20px rgba(255,193,7,0.3);
 }
 
-/* Make all text inside card details white */
+
 .sweet-card .card-body,
 .sweet-card .card-footer {
   color: #ffffff;
