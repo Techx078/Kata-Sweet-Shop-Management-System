@@ -23,10 +23,18 @@ function deleteSweet(id) {
     sweets.splice(index, 1);
   }
 }
+function purchaseSweet(id, qty) {
+  const sweet = sweets.find(s => s.id === id);
+  if (!sweet) throw new Error('Sweet not found');
+  if (sweet.quantity < qty) throw new Error('Not enough stock');
+  sweet.quantity -= qty;
+  return sweet;
+}
 
 module.exports = {
   reset,
   addSweet,
   getAllSweets,
-  deleteSweet
+  deleteSweet,
+  purchaseSweet
 };
