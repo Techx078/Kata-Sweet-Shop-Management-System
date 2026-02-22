@@ -125,3 +125,33 @@ describe('Sweet Service', () => {
   });
 
 });
+private boolean isActiveBooking(LocalDate targetDate, Long userId) {
+        // 1. Fetch the employee (this includes their full history of participations)
+        Employee employee = employeeRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Employee not found!!"));
+
+        // 2. Extract all BookingRequests the user is part of
+        List<BookingRequest> allUserBookings = employee.getBookingParticipants().stream()
+                .map(BookingParticipant::getBookingRequest)
+                .toList();
+
+        LocalDateTime now = LocalDateTime.now();
+
+        // 3. Filter using Java Streams
+        return allUserBookings.stream().anyMatch(booking -> {
+            
+            // Condition 1: Must be on the specific date they are trying to book
+            boolean isSameDate = booking.getSlot().getDate().equals(targetDate);
+
+            // Condition 2: Must be CONFIRMED or PENDING
+            boolean isActiveStatus = (booking.getStatus() == BookingRequest.RequestStatus.CONFIRMED || 
+                                      booking.getStatus() == BookingRequest.RequestStatus.PENDING);
+
+            // Condition 3: Has NOT played yet (Slot's End Time is in the future)
+            LocalDateTime slotEndDateTime = LocalDateTime.of(booking.getSlot().getDate(), booking.getSlot().getEndTime());
+            boolean isNotPlayedYet = slotEndDateTime.isAfter(now);
+
+            // If ALL three are true, they have an active booking blocking them today
+            return isSameDate && isActiveStatus && isNotPlayedYet;
+        });
+              }
