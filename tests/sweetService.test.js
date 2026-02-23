@@ -155,3 +155,65 @@ private boolean isActiveBooking(LocalDate targetDate, Long userId) {
             return isSameDate && isActiveStatus && isNotPlayedYet;
         });
               }
+    public void cancelBooking(Long bookingId, CustomUserPrincipal user) {
+        BookingRequest request = bookingRequestRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
+                
+        LocalDateTime slotStartDateTime = LocalDateTime.of(request.getSlot().getDate(), request.getSlot().getStartTime());
+
+        if (slotStartDateTime.isBefore(LocalDateTime.now())) {
+            throw new IllegalArgumentException("You cannot cancel a past booking!");
+        }
+        
+        // CHANGED: Removed the 'minusMinutes(45)' cancellation restriction. They can cancel anytime.
+        
+        if (!request.getPrimaryBooker().getId().equals(user.getId())) {
+            throw new IllegalArgumentException("You can only cancel your own bookings!");
+        }
+        if (request.getStatus() == BookingRequest.RequestStatus.CANCELLED) {
+            throw new IllegalArgumentException("Booking is already cancelled.");
+        }
+
+        GameSlot slot = request.getSlot();
+        
+        if (request.getStatus() == BookingRequest.RequestStatus.CONFIRMED) {
+            // 1. Penalize/Decrement counts for the team that cancelled
+            decrementPlayCount(request.getPrimaryBooker(), slot.getGame());
+            if (request.getParticipants() != null) {
+                for (BookingParticipant part : request.getParticipants()) {
+                    if (!part.getEmployee().getId().equals(request.getPrimaryBooker().getId())) {
+                        decrementPlayCount(part.getEmployee(), slot.getGame());
+                    }
+                }
+            }
+
+            // 2. AUTO-REASSIGNMENT LOGIC
+            Long newWinnerId = getWinningBookingRequestId(slot.getId());
+            
+            if (newWinnerId != null) {
+                // Someone was on the waitlist! Give it to them instantly.
+                BookingRequest newWinner = bookingRequestRepository.findById(newWinnerId).get();
+                newWinner.setStatus(BookingRequest.RequestStatus.CONFIRMED);
+                incrementTeamPlayCount(newWinner);
+                bookingRequestRepository.save(newWinner);
+                
+                log.info("AUTO-REASSIGN: Slot {} reassigned from cancelled booking to New Winner {}", slot.getId(), newWinner.getPrimaryBooker().getEmail());
+                
+                // Send Confirmation Emails to the new winners
+                sendBookingRequestMail(newWinner.getPrimaryBooker(), newWinner);
+                newWinner.getParticipants().forEach(part -> sendBookingRequestMail(part.getEmployee(), newWinner));
+                
+                checkAndResetCycle(slot.getGame().getId());
+            } else {
+                // Nobody is on the waitlist. Open the slot for anyone to grab.
+                slot.setStatus(GameSlot.SlotStatus.OPEN);
+                gameSlotsRepository.save(slot);
+                log.info("Cancelled booking was CONFIRMED. No waitlist found. Re-opening Slot ID {}", slot.getId());
+            }
+        }
+
+        // 3. Mark the original request as cancelled and notify them
+        request.setStatus(BookingRequest.RequestStatus.CANCELLED);
+        bookingRequestRepository.save(request);
+        sendMailForCancellation(request);
+    }
