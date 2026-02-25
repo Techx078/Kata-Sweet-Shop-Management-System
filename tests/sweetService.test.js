@@ -1,351 +1,173 @@
-const service = require('../src/sweetService.js');
+package com.HRMS.HRMS.service;
 
-const validCategories = ['Nut-Based', 'Fruit-Based', 'Milk-Based', 'Sugar-Based', 'Others'];
+import com.HRMS.HRMS.dto.Notification.NotificationDto;
+import com.HRMS.HRMS.entity.Employee;
+import com.HRMS.HRMS.entity.Notification;
+import com.HRMS.HRMS.repository.NotificationRepository;
+import lombok.extern.slf4j.Slf4j;
+import org.modelmapper.ModelMapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-describe('Sweet Service', () => {
-  beforeEach(() => service.reset());
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
-  test('should add new sweet to inventory', () => {
-    const sweet = { id: 1001, name: 'Test Sweet', category: 'Nut-Based', price: 10, quantity: 5 };
-    service.addSweet(sweet);
-    const sweets = service.getAllSweets();
-    expect(sweets).toContainEqual(sweet);
-  });
+@Service
+@Transactional
+@Slf4j
+public class NotificationService {
 
-  test('should not add sweet with duplicate ID', () => {
-    const sweet1 = { id: 1002, name: 'Sweet A', category: 'Milk-Based', price: 20, quantity: 3 };
-    const sweet2 = { id: 1002, name: 'Sweet B', category: 'Sugar-Based', price: 25, quantity: 2 };
-    service.addSweet(sweet1);
-    expect(() => {
-      service.addSweet(sweet2);
-    }).toThrow('Sweet with this ID already exists');
-  });
+    private final NotificationRepository notificationRepository;
+    private final ModelMapper modelMapper;
+    
+    // Store active SSE connections mapped by Employee ID
+    private final Map<Long, SseEmitter> userEmitters = new ConcurrentHashMap<>();
 
-  test('should not add sweet with invalid category', () => {
-    const sweet = { id: 1003, name: 'Invalid Category', category: 'Fake', price: 10, quantity: 1 };
-    expect(() => {
-      service.addSweet(sweet);
-    }).toThrow('Invalid category');
-  });
-
-  test('should not add sweet with negative price or quantity', () => {
-    const sweet1 = { id: 1004, name: 'Neg Price', category: 'Others', price: -5, quantity: 2 };
-    const sweet2 = { id: 1005, name: 'Neg Qty', category: 'Nut-Based', price: 10, quantity: -3 };
-    expect(() => service.addSweet(sweet1)).toThrow('Price must be non-negative');
-    expect(() => service.addSweet(sweet2)).toThrow('Quantity must be non-negative');
-  });
-
-  test('should delete sweet by ID', () => {
-    const sweet = { id: 1006, name: 'Delete Me', category: 'Fruit-Based', price: 15, quantity: 3 };
-    service.addSweet(sweet);
-    service.deleteSweet(1006, 'delete123'); 
-    service.deleteSweet(1006, 'delete123');
-    const sweets = service.getAllSweets();
-    expect(sweets.find(s => s.id === 1006)).toBeUndefined();
-  });
-
-  test('should do nothing when deleting non-existent sweet', () => {
-    expect(() => service.deleteSweet(9999,'delete123')).not.toThrow();
-  });
-
-  test('should purchase sweet and reduce quantity', () => {
-    const sweet = { id: 1007, name: 'Buy Me', category: 'Milk-Based', price: 20, quantity: 10 };
-    service.addSweet(sweet);
-    service.purchaseSweet(1007, 4);
-    const updated = service.getAllSweets().find(s => s.id === 1007);
-    expect(updated.quantity).toBe(6);
-  });
-
-  test('should throw error when purchasing more than available', () => {
-    const sweet = { id: 1008, name: 'Low Stock', category: 'Sugar-Based', price: 20, quantity: 2 };
-    service.addSweet(sweet);
-    expect(() => service.purchaseSweet(1008, 5)).toThrow('Not enough stock');
-  });
-
-  test('should throw error when purchasing non-existent sweet', () => {
-    expect(() => service.purchaseSweet(9999, 1)).toThrow('Sweet not found');
-  });
-
-  test('should restock sweet and increase quantity with correct password', () => {
-    const sweet = { id: 1009, name: 'Restock Me', category: 'Others', price: 25, quantity: 5 };
-    service.addSweet(sweet);
-    service.restockSweet(1009, 10, 'secret123');
-    const updated = service.getAllSweets().find(s => s.id === 1009);
-    expect(updated.quantity).toBe(15);
-  });
-
-  test('should throw error when restocking with wrong password', () => {
-    const sweet = { id: 1010, name: 'Wrong Pass', category: 'Nut-Based', price: 25, quantity: 5 };
-    service.addSweet(sweet);
-    expect(() => service.restockSweet(1010, 10, 'badpass')).toThrow('Invalid password');
-  });
-
-  test('should throw error when restocking non-existent sweet', () => {
-    expect(() => service.restockSweet(9999, 10, 'secret123')).toThrow('Sweet not found');
-  });
-
-  // Search tests
-  test('should search sweets by partial name (case-insensitive)', () => {
-    service.addSweet({ id: 1011, name: 'Mango Barfi', category: 'Fruit-Based', price: 40, quantity: 10 });
-    const results = service.searchSweets({ name: 'mango' });
-    expect(results.length).toBe(1);
-    expect(results[0].name).toBe('Mango Barfi');
-  });
-
-  test('should search sweets by category', () => {
-    service.addSweet({ id: 1012, name: 'Badam Halwa', category: 'Nut-Based', price: 60, quantity: 5 });
-    const results = service.searchSweets({ category: 'Nut-Based' });
-    expect(results.find(s => s.id === 1012)).toBeDefined();
-  });
-
-  test('should search sweets by price range', () => {
-    service.addSweet({ id: 1013, name: 'Cheap Sweet', category: 'Others', price: 15, quantity: 10 });
-    const results = service.searchSweets({ minPrice: 10, maxPrice: 20 });
-    expect(results.find(s => s.id === 1013)).toBeDefined();
-  });
-
-  test('should return empty array if no sweets match search', () => {
-    service.addSweet({ id: 1014, name: 'Random Sweet', category: 'Sugar-Based', price: 50, quantity: 1 });
-    const results = service.searchSweets({ name: 'xyz' });
-    expect(results).toEqual([]);
-  });
-
-  test('should search by combined filters (name & category & price)', () => {
-    service.addSweet({ id: 1015, name: 'Kesar Peda', category: 'Milk-Based', price: 30, quantity: 8 });
-    const results = service.searchSweets({ name: 'kesar', category: 'Milk-Based', minPrice: 20, maxPrice: 40 });
-    expect(results.length).toBe(1);
-    expect(results[0].id).toBe(1015);
-  });
-  //for empty search
-  test('should handle empty search (return all sweets)', () => {
-    service.addSweet({ id: 1016, name: 'Sweet 1', category: 'Nut-Based', price: 10, quantity: 2 });
-    service.addSweet({ id: 1017, name: 'Sweet 2', category: 'Others', price: 20, quantity: 3 });
-    const results = service.searchSweets({});
-    expect(results.length).toBe(2);
-  });
-
-});
-private boolean isActiveBooking(LocalDate targetDate, Long userId) {
-        // 1. Fetch the employee (this includes their full history of participations)
-        Employee employee = employeeRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Employee not found!!"));
-
-        // 2. Extract all BookingRequests the user is part of
-        List<BookingRequest> allUserBookings = employee.getBookingParticipants().stream()
-                .map(BookingParticipant::getBookingRequest)
-                .toList();
-
-        LocalDateTime now = LocalDateTime.now();
-
-        // 3. Filter using Java Streams
-        return allUserBookings.stream().anyMatch(booking -> {
-            
-            // Condition 1: Must be on the specific date they are trying to book
-            boolean isSameDate = booking.getSlot().getDate().equals(targetDate);
-
-            // Condition 2: Must be CONFIRMED or PENDING
-            boolean isActiveStatus = (booking.getStatus() == BookingRequest.RequestStatus.CONFIRMED || 
-                                      booking.getStatus() == BookingRequest.RequestStatus.PENDING);
-
-            // Condition 3: Has NOT played yet (Slot's End Time is in the future)
-            LocalDateTime slotEndDateTime = LocalDateTime.of(booking.getSlot().getDate(), booking.getSlot().getEndTime());
-            boolean isNotPlayedYet = slotEndDateTime.isAfter(now);
-
-            // If ALL three are true, they have an active booking blocking them today
-            return isSameDate && isActiveStatus && isNotPlayedYet;
-        });
-              }
-    public void cancelBooking(Long bookingId, CustomUserPrincipal user) {
-        BookingRequest request = bookingRequestRepository.findById(bookingId)
-                .orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
-                
-        LocalDateTime slotStartDateTime = LocalDateTime.of(request.getSlot().getDate(), request.getSlot().getStartTime());
-
-        if (slotStartDateTime.isBefore(LocalDateTime.now())) {
-            throw new IllegalArgumentException("You cannot cancel a past booking!");
-        }
-        
-        // CHANGED: Removed the 'minusMinutes(45)' cancellation restriction. They can cancel anytime.
-        
-        if (!request.getPrimaryBooker().getId().equals(user.getId())) {
-            throw new IllegalArgumentException("You can only cancel your own bookings!");
-        }
-        if (request.getStatus() == BookingRequest.RequestStatus.CANCELLED) {
-            throw new IllegalArgumentException("Booking is already cancelled.");
-        }
-
-        GameSlot slot = request.getSlot();
-        
-        if (request.getStatus() == BookingRequest.RequestStatus.CONFIRMED) {
-            // 1. Penalize/Decrement counts for the team that cancelled
-            decrementPlayCount(request.getPrimaryBooker(), slot.getGame());
-            if (request.getParticipants() != null) {
-                for (BookingParticipant part : request.getParticipants()) {
-                    if (!part.getEmployee().getId().equals(request.getPrimaryBooker().getId())) {
-                        decrementPlayCount(part.getEmployee(), slot.getGame());
-                    }
-                }
-            }
-
-            // 2. AUTO-REASSIGNMENT LOGIC
-            Long newWinnerId = getWinningBookingRequestId(slot.getId());
-            
-            if (newWinnerId != null) {
-                // Someone was on the waitlist! Give it to them instantly.
-                BookingRequest newWinner = bookingRequestRepository.findById(newWinnerId).get();
-                newWinner.setStatus(BookingRequest.RequestStatus.CONFIRMED);
-                incrementTeamPlayCount(newWinner);
-                bookingRequestRepository.save(newWinner);
-                
-                log.info("AUTO-REASSIGN: Slot {} reassigned from cancelled booking to New Winner {}", slot.getId(), newWinner.getPrimaryBooker().getEmail());
-                
-                // Send Confirmation Emails to the new winners
-                sendBookingRequestMail(newWinner.getPrimaryBooker(), newWinner);
-                newWinner.getParticipants().forEach(part -> sendBookingRequestMail(part.getEmployee(), newWinner));
-                
-                checkAndResetCycle(slot.getGame().getId());
-            } else {
-                // Nobody is on the waitlist. Open the slot for anyone to grab.
-                slot.setStatus(GameSlot.SlotStatus.OPEN);
-                gameSlotsRepository.save(slot);
-                log.info("Cancelled booking was CONFIRMED. No waitlist found. Re-opening Slot ID {}", slot.getId());
-            }
-        }
-
-        // 3. Mark the original request as cancelled and notify them
-        request.setStatus(BookingRequest.RequestStatus.CANCELLED);
-        bookingRequestRepository.save(request);
-        sendMailForCancellation(request);
+    @Autowired
+    public NotificationService(NotificationRepository notificationRepository, ModelMapper modelMapper){
+        this.notificationRepository = notificationRepository;
+        this.modelMapper = modelMapper;
     }
-// App.jsx
-import "./App.css";
-import { ToastContainer } from "react-toastify";
-import { createBrowserRouter, createRoutesFromElements, Route, RouterProvider } from "react-router-dom";
 
-// ... [Keep all your existing Page imports here] ...
-import Login from "./Pages/Auth/Login";
-import Home from "./Pages/Home";
-import Layout from "./Layout/Layout";
-// ... (I've truncated the imports for brevity, keep all of yours!)
-
-// 1. Define the router outside the component
-const router = createBrowserRouter(
-  createRoutesFromElements(
-    <Route path="/" element={<Layout />}>
-      {/* Note: I changed path="/" to index for the Home route, which is best practice for default child routes */}
-      <Route index element={<Home />} />
-      <Route path="/profile/:id" element={<Profile />} />
-      <Route path="/login" element={<Login />} />
-      
-      {/* Travel Routes */}
-      <Route path="/travel" element={<MyTravels />} />
-      <Route path="/travel/:travelId/:empId" element={<ShowTravelDetails />} />
-      <Route path="/travel/create" element={<CreateTravel />} />
-      <Route path="/travel/uploadDocs/:ownerId/:travelId" element={<UploadDocument />} />
-      <Route path="/travel/manager/:managerId" element={<TeamTravel />} />
-      <Route path="/travelDoc/:travelId/:empId" element={<TravelDocEmployee />} />
-      <Route path="/travel-expense/:travelAssignmentId/Create" element={<CreateExpense />} />
-      <Route path="/travel-expense/:travelId/:empId" element={<ShowTravelExpense />} />
-      <Route path="/notification/:userId" element={<NotificationPage />} />
-      <Route path="/orgChart/:empId" element={<OrgChart />} />
-      
-      {/* Job Openings */}
-      <Route path="/jobOpening" element={<Jobs />} />
-      <Route path="/jobOpening/Create" element={<CreateJob />} />
-      <Route path="/jobOpening/share/:jobId" element={<ShareJob />} />
-      <Route path="/jobOpening/referr/:jobId" element={<ReferraJob />} />
-      <Route path="/job-referrals/:jobId" element={<JobReferrals />} />
-      
-      {/* Config */}
-      <Route path="/config" element={<Config />} />
-      
-      {/* Game Booking */}
-      <Route path="/game/booking" element={<ShowGameHistory />} />
-      <Route path="/game/slot/:gameId" element={<ShowUpcomingSlot />} />
-      <Route path="/game/slot/:slotId/:gameId" element={<SlotBooking />} />
-      <Route path="/game/config" element={<GameConfig />} />
-      <Route path="/game/config/:gameId" element={<UpdateGameConfig />} />
-      <Route path="/game/create" element={<CreateGameConfig />} />
-      <Route path="/game/slot-monitor/:gameId" element={<SlotMonitoring />} />
-      <Route path="/achievements" element={<AchievementsPage />} />
-      <Route path="/calender" element={<Calender />} />
-    </Route>
-  )
-);
-
-function App() {
-  return (
-    <>
-      <ToastContainer
-        position="top-right"
-        autoClose={4000}
-        hideProgressBar={false}
-      />
-      {/* 2. Provide the router to your app */}
-      <RouterProvider router={router} />
-    </>
-  );
-}
-
-export default App;
+    // --- NEW: Subscribe to SSE ---
+    public SseEmitter subscribe(Long empId) {
+        // Set timeout to 1 hour (or -1L for infinite)
+        SseEmitter emitter = new SseEmitter(60 * 60 * 1000L); 
         
-// App.jsx
-import "./App.css";
-import { ToastContainer } from "react-toastify";
-import { 
-  createBrowserRouter, 
-  createRoutesFromElements, 
-  Route, 
-  RouterProvider 
-} from "react-router-dom";
+        userEmitters.put(empId, emitter);
 
-// Import your context here now
-import AuthUserContextProvider from './Contexts/AuthUserContext.jsx'; 
+        // Clean up when the connection is closed or times out
+        emitter.onCompletion(() -> userEmitters.remove(empId));
+        emitter.onTimeout(() -> userEmitters.remove(empId));
+        emitter.onError((e) -> userEmitters.remove(empId));
 
-// ... [Keep all your Page and Layout imports] ...
-import Layout from "./Layout/Layout";
-import Home from "./Pages/Home";
-import Login from "./Pages/Auth/Login";
-// ... 
+        return emitter;
+    }
 
-// 1. Create a Root Wrapper Component
-// Everything inside here has access to useNavigate!
-const RootWrapper = () => {
+    public void sendNotification(Employee recipient, String message, String type, Long referenceId) {
+        // 1. Save to Database
+        Notification notification = new Notification();
+        notification.setUser(recipient);
+        notification.setMessage(message);
+        notification.setType(type);
+        notification.setReferenceId(referenceId);
+        notification.setRead(false);
+        Notification savedNotification = notificationRepository.save(notification);
+        
+        log.info("Notification sent to " + notification.getUser().getEmail() + " of type " + notification.getType());
+
+        // 2. Push to real-time stream if user is online
+        SseEmitter emitter = userEmitters.get(recipient.getId());
+        if (emitter != null) {
+            try {
+                NotificationDto dto = modelMapper.map(savedNotification, NotificationDto.class);
+                // Send an event named "new-notification" containing the DTO as JSON
+                emitter.send(SseEmitter.event().name("new-notification").data(dto));
+            } catch (IOException e) {
+                userEmitters.remove(recipient.getId());
+                log.error("Failed to send SSE to user " + recipient.getId(), e);
+            }
+        }
+    }
+
+    // ... (keep your existing findByUserIdOrderByCreatedAtDesc, markAsRead, getUnreadCount methods)
+                               }
+  import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+// ... inside your NotificationController ...
+
+    // The produces = MediaType.TEXT_EVENT_STREAM_VALUE is critical for SSE!
+    @GetMapping(value = "/stream/{empId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamNotifications(@PathVariable Long empId) {
+        return notificationService.subscribe(empId);
+  }
+   import { useState, useEffect } from "react";
+import { Clock } from "lucide-react";
+import { Loader } from "../../components/ui/Loader";
+import { useParams } from "react-router-dom";
+import { toast } from "react-toastify";
+import {
+  getAllNotifications,
+  marksAsRead,
+} from "../../Services/NotificationService";
+import { handleGlobalError } from "../../Services/GlobalExceptionService";
+
+const NotificationPage = () => {
+  const { userId } = useParams();
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // 1. Fetch initial historical notifications
+    fetchNotifications();
+
+    // 2. Open the Server-Sent Events connection
+    // IMPORTANT: Replace this URL with your actual backend base URL if it's different
+    const sseUrl = `http://localhost:8080/api/notifications/stream/${userId}`;
+    const eventSource = new EventSource(sseUrl);
+
+    // 3. Listen for the specific "new-notification" event we named in Spring Boot
+    eventSource.addEventListener("new-notification", (event) => {
+      try {
+        const newNotification = JSON.parse(event.data);
+        
+        // Add the new notification to the TOP of the list dynamically
+        setNotifications((prevNotifications) => [newNotification, ...prevNotifications]);
+        
+        // Optional: Show a toast to alert the user immediately
+        toast.info(newNotification.message);
+      } catch (error) {
+        console.error("Error parsing SSE data", error);
+      }
+    });
+
+    eventSource.onerror = (error) => {
+      console.error("SSE connection error", error);
+      eventSource.close();
+    };
+
+    // 4. Cleanup: Close the connection when the user leaves the page
+    return () => {
+      eventSource.close();
+    };
+  }, [userId]);
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await getAllNotifications(userId);
+      setNotifications(res.data);
+    } catch (error) {
+      handleGlobalError(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleNotificationClick = async (id, read) => {
+    if (read) return;
+    try {
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+      );
+      await marksAsRead(id);
+    } catch (error) {
+      handleGlobalError(error);
+    }
+  };
+
+  // ... (Your return statement and UI styling remain exactly the same)
   return (
-    <AuthUserContextProvider>
-      <ToastContainer
-        position="top-right"
-        autoClose={4000}
-        hideProgressBar={false}
-      />
-      <Layout />
-    </AuthUserContextProvider>
+    <div className="max-w-4xl mx-auto p-6 min-h-screen bg-white">
+      {/* ... keeping your existing UI layout ... */}
+    </div>
   );
 };
 
-// 2. Define the router, passing the RootWrapper to the very top route
-const router = createBrowserRouter(
-  createRoutesFromElements(
-    <Route path="/" element={<RootWrapper />}>
-      <Route index element={<Home />} />
-      <Route path="/profile/:id" element={<Profile />} />
-      <Route path="/login" element={<Login />} />
-      
-      {/* Travel Routes */}
-      <Route path="/travel" element={<MyTravels />} />
-      {/* ... keeping the rest of your travel routes exactly the same ... */}
-      
-      {/* Game Booking */}
-      <Route path="/game/booking" element={<ShowGameHistory />} />
-      {/* ... keeping the rest of your game routes exactly the same ... */}
-    </Route>
-  )
-);
-
-// 3. Just render the Provider in App
-function App() {
-  return <RouterProvider router={router} />;
-}
-
-export default App;
+export default NotificationPage;
         
