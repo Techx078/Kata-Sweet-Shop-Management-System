@@ -289,3 +289,63 @@ function App() {
 
 export default App;
         
+// App.jsx
+import "./App.css";
+import { ToastContainer } from "react-toastify";
+import { 
+  createBrowserRouter, 
+  createRoutesFromElements, 
+  Route, 
+  RouterProvider 
+} from "react-router-dom";
+
+// Import your context here now
+import AuthUserContextProvider from './Contexts/AuthUserContext.jsx'; 
+
+// ... [Keep all your Page and Layout imports] ...
+import Layout from "./Layout/Layout";
+import Home from "./Pages/Home";
+import Login from "./Pages/Auth/Login";
+// ... 
+
+// 1. Create a Root Wrapper Component
+// Everything inside here has access to useNavigate!
+const RootWrapper = () => {
+  return (
+    <AuthUserContextProvider>
+      <ToastContainer
+        position="top-right"
+        autoClose={4000}
+        hideProgressBar={false}
+      />
+      <Layout />
+    </AuthUserContextProvider>
+  );
+};
+
+// 2. Define the router, passing the RootWrapper to the very top route
+const router = createBrowserRouter(
+  createRoutesFromElements(
+    <Route path="/" element={<RootWrapper />}>
+      <Route index element={<Home />} />
+      <Route path="/profile/:id" element={<Profile />} />
+      <Route path="/login" element={<Login />} />
+      
+      {/* Travel Routes */}
+      <Route path="/travel" element={<MyTravels />} />
+      {/* ... keeping the rest of your travel routes exactly the same ... */}
+      
+      {/* Game Booking */}
+      <Route path="/game/booking" element={<ShowGameHistory />} />
+      {/* ... keeping the rest of your game routes exactly the same ... */}
+    </Route>
+  )
+);
+
+// 3. Just render the Provider in App
+function App() {
+  return <RouterProvider router={router} />;
+}
+
+export default App;
+        
