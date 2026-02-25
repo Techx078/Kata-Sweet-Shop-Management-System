@@ -217,3 +217,75 @@ private boolean isActiveBooking(LocalDate targetDate, Long userId) {
         bookingRequestRepository.save(request);
         sendMailForCancellation(request);
     }
+// App.jsx
+import "./App.css";
+import { ToastContainer } from "react-toastify";
+import { createBrowserRouter, createRoutesFromElements, Route, RouterProvider } from "react-router-dom";
+
+// ... [Keep all your existing Page imports here] ...
+import Login from "./Pages/Auth/Login";
+import Home from "./Pages/Home";
+import Layout from "./Layout/Layout";
+// ... (I've truncated the imports for brevity, keep all of yours!)
+
+// 1. Define the router outside the component
+const router = createBrowserRouter(
+  createRoutesFromElements(
+    <Route path="/" element={<Layout />}>
+      {/* Note: I changed path="/" to index for the Home route, which is best practice for default child routes */}
+      <Route index element={<Home />} />
+      <Route path="/profile/:id" element={<Profile />} />
+      <Route path="/login" element={<Login />} />
+      
+      {/* Travel Routes */}
+      <Route path="/travel" element={<MyTravels />} />
+      <Route path="/travel/:travelId/:empId" element={<ShowTravelDetails />} />
+      <Route path="/travel/create" element={<CreateTravel />} />
+      <Route path="/travel/uploadDocs/:ownerId/:travelId" element={<UploadDocument />} />
+      <Route path="/travel/manager/:managerId" element={<TeamTravel />} />
+      <Route path="/travelDoc/:travelId/:empId" element={<TravelDocEmployee />} />
+      <Route path="/travel-expense/:travelAssignmentId/Create" element={<CreateExpense />} />
+      <Route path="/travel-expense/:travelId/:empId" element={<ShowTravelExpense />} />
+      <Route path="/notification/:userId" element={<NotificationPage />} />
+      <Route path="/orgChart/:empId" element={<OrgChart />} />
+      
+      {/* Job Openings */}
+      <Route path="/jobOpening" element={<Jobs />} />
+      <Route path="/jobOpening/Create" element={<CreateJob />} />
+      <Route path="/jobOpening/share/:jobId" element={<ShareJob />} />
+      <Route path="/jobOpening/referr/:jobId" element={<ReferraJob />} />
+      <Route path="/job-referrals/:jobId" element={<JobReferrals />} />
+      
+      {/* Config */}
+      <Route path="/config" element={<Config />} />
+      
+      {/* Game Booking */}
+      <Route path="/game/booking" element={<ShowGameHistory />} />
+      <Route path="/game/slot/:gameId" element={<ShowUpcomingSlot />} />
+      <Route path="/game/slot/:slotId/:gameId" element={<SlotBooking />} />
+      <Route path="/game/config" element={<GameConfig />} />
+      <Route path="/game/config/:gameId" element={<UpdateGameConfig />} />
+      <Route path="/game/create" element={<CreateGameConfig />} />
+      <Route path="/game/slot-monitor/:gameId" element={<SlotMonitoring />} />
+      <Route path="/achievements" element={<AchievementsPage />} />
+      <Route path="/calender" element={<Calender />} />
+    </Route>
+  )
+);
+
+function App() {
+  return (
+    <>
+      <ToastContainer
+        position="top-right"
+        autoClose={4000}
+        hideProgressBar={false}
+      />
+      {/* 2. Provide the router to your app */}
+      <RouterProvider router={router} />
+    </>
+  );
+}
+
+export default App;
+        
