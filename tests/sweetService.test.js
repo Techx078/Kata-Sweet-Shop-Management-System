@@ -171,3 +171,42 @@ const NotificationPage = () => {
 
 export default NotificationPage;
         
+public List<AchievementPostResponseDto> getFeed(Long currentEmployeeId, Long authorId, String tagName, LocalDateTime from, LocalDateTime to) {
+    CriteriaBuilder cb = em.getCriteriaBuilder();
+    CriteriaQuery<AchievementPost> cq = cb.createQuery(AchievementPost.class);
+    Root<AchievementPost> post = cq.from(AchievementPost.class);
+    
+    // 1. Create a list to hold our dynamic conditions (Predicates)
+    List<Predicate> predicates = new ArrayList<>();
+
+    // 2. Always filter out deleted posts
+    predicates.add(cb.isFalse(post.get("isDeleted")));
+
+    // 3. Add conditional filters (Only if they are not null/empty)
+    if (authorId != null) {
+        predicates.add(cb.equal(post.get("authorId"), authorId));
+    }
+
+    if (tagName != null && !tagName.isBlank()) {
+        // Joining with tags (assuming AchievementPost has a Collection of tags)
+        Join<Object, Object> tags = post.join("tags"); 
+        predicates.add(cb.equal(tags.get("name"), tagName));
+    }
+
+    if (from != null && to != null) {
+        predicates.add(cb.between(post.get("createdAt"), from, to));
+    }
+
+    // 4. Apply all predicates to the query using AND logic
+    cq.where(cb.and(predicates.toArray(new Predicate[0])));
+
+    // 5. Apply Global Ordering
+    cq.orderBy(cb.desc(post.get("createdAt")));
+
+    // 6. Execute and Map
+    List<AchievementPost> posts = em.createQuery(cq).getResultList();
+
+    return posts.stream()
+            .map(p -> mapToPostResponse(p, currentEmployeeId))
+            .collect(Collectors.toList());
+}
