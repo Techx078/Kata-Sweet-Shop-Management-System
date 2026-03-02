@@ -118,80 +118,129 @@ If you want, I can:
 ✅ Give interview questions + answers
 ✅ Create a 1-day or 2-day revision timetable
 ✅ Ask you mock interview questions based on your level
-Just tell me 👌 Jobs() {
-  const [jobs, setJobs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  
-  // NEW: Pagination States
-  const [currentPage, setCurrentPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
-  const [isLastPage, setIsLastPage] = useState(false);
-
-  const { authUser } = useAuthUserContext();
-  const navigate = useNavigate();
-
-  // NEW: Add currentPage to the dependency array. 
-  // Every time currentPage changes, it triggers this useEffect to fetch new data.
-  useEffect(() => {
-    fetchActiveJobs();
-  }, [currentPage]);
-
-  const fetchActiveJobs = async () => {
-    try {
-      setLoading(true);
-      // Pass the current page and desired page size (e.g., 5 jobs per page)
-      const res = await getAllActiveJobs(currentPage, 5); 
-      
-      // Update states using your new PaginatedResponseDto structure
-      setJobs(res.data.content);          // Extract the actual array of jobs
-      setTotalPages(res.data.totalPages); // Extract total pages
-      setIsLastPage(res.data.last);       // Extract the boolean
-      
-    } catch (e) {
-      handleGlobalError(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const closeJobOpening = async (jobId) => {
-    try {
-      await updateJobStatus(jobId, "CLOSED");
-      toast.success("Job Closed SuccessFully!!");
-      fetchActiveJobs(); // Refresh the current page after closing a job
-    } catch (e) {
-      handleGlobalError(e);
-    }
-  };
-
-  // Pagination Handlers
-  const handlePreviousPage = () => {
-    if (currentPage > 0) {
-      setCurrentPage((prev) => prev - 1);
-    }
-  };
-
-  const handleNextPage = () => {
-    if (!isLastPage) {
-      setCurrentPage((prev) => prev + 1);
-    }
-  };
-
-  return (
-    <>
-      <div className="max-w-4xl mx-auto space-y-6 w-full bg-gray-100 p-6">
-        <div className="bg-white rounded-2xl shadow p-6">
-          <div className="grid grid-cols-1">
-            <h2 className="text-2xl text-center font-semibold mb-4 flex justify-around">
-              Job-Openings
-            </h2>
-            <div className="flex justify-center mb-3">
-              {authUser.role === "HR" && (
-                <button
-                  onClick={() => navigate(`Create`)}
-                  className="w-auto bg-black text-white font-medium py-2 px-3 rounded-2xl "
-                >
-                  Create Job-Opening
+Just tell me 👌
+  🔹 STEP 1: AWS Basics (FOUNDATION – MUST)
+First understand what AWS is, not services.
+Topics to Learn
+What is Cloud Computing?
+IaaS vs PaaS vs SaaS
+Regions & Availability Zones
+AWS Global Infrastructure
+AWS Free Tier
+Shared Responsibility Model
+Pricing basics (Pay-as-you-go)
+📘 Documentation:
+https://docs.aws.amazon.com/whitepapers/latest/aws-overview/introduction.html�
+https://docs.aws.amazon.com/whitepapers/latest/aws-overview/global-infrastructure.html�
+https://aws.amazon.com/what-is-cloud-computing/�
+🔹 STEP 2: Identity & Security (VERY IMPORTANT)
+AWS security is always asked.
+Topics to Learn
+Root user vs IAM user
+IAM Users, Groups, Roles
+Policies (JSON – basic idea)
+MFA (Multi-Factor Authentication)
+Least Privilege Principle
+📘 Documentation:
+https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html�
+https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users.html�
+https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html�
+🔹 STEP 3: Compute Services
+Where your application actually runs.
+Topics to Learn
+EC2 (Virtual Server)
+Instance types (t2, t3, etc.)
+AMI
+Key Pair
+Security Groups
+Elastic IP
+Auto Scaling (basic idea)
+Load Balancer (ELB – basics)
+📘 Documentation:
+https://docs.aws.amazon.com/ec2/�
+https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/concepts.html�
+https://docs.aws.amazon.com/autoscaling/ec2/userguide/what-is-amazon-ec2-auto-scaling.html�
+https://docs.aws.amazon.com/elasticloadbalancing/latest/userguide/what-is-load-balancing.html�
+🔹 STEP 4: Storage Services
+Used everywhere.
+Topics to Learn
+S3 (Object Storage)
+Buckets & Objects
+S3 Storage Classes
+Versioning
+Static website hosting
+EBS vs EFS (difference only)
+📘 Documentation:
+https://docs.aws.amazon.com/s3/�
+https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html�
+https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AmazonEBS.html�
+🔹 STEP 5: Database Services
+Very useful for backend roles.
+Topics to Learn
+RDS (MySQL / PostgreSQL / SQL Server)
+DB Instance
+Backups & Snapshots
+Multi-AZ
+DynamoDB (basic idea – NoSQL)
+📘 Documentation:
+https://docs.aws.amazon.com/rds/�
+https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Welcome.html�
+https://docs.aws.amazon.com/dynamodb/�
+🔹 STEP 6: Networking (Important but Learn Basics)
+Understand how traffic flows.
+Topics to Learn
+VPC
+Subnets (Public / Private)
+Route Tables
+Internet Gateway
+NAT Gateway
+Security Groups vs NACL
+📘 Documentation:
+https://docs.aws.amazon.com/vpc/�
+https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html�
+🔹 STEP 7: Application & Integration Services
+Helps in real systems.
+Topics to Learn
+SQS (Queue)
+SNS (Notifications)
+API Gateway (basic)
+Lambda (Serverless intro)
+📘 Documentation:
+https://docs.aws.amazon.com/sqs/�
+https://docs.aws.amazon.com/sns/�
+https://docs.aws.amazon.com/lambda/�
+https://docs.aws.amazon.com/apigateway/�
+🔹 STEP 8: Monitoring & Logging
+Production knowledge.
+Topics to Learn
+CloudWatch (Logs & Metrics)
+Alarms
+CloudTrail (who did what)
+📘 Documentation:
+https://docs.aws.amazon.com/cloudwatch/�
+https://docs.aws.amazon.com/cloudtrail/�
+🔹 STEP 9: Deployment & DevOps Basics
+Very good with .NET & backend.
+Topics to Learn
+Elastic Beanstalk
+CI/CD concept
+CodePipeline (basic idea)
+📘 Documentation:
+https://docs.aws.amazon.com/elasticbeanstalk/�
+https://docs.aws.amazon.com/codepipeline/�
+🔹 STEP 10: Architecture & Best Practices
+This makes you interview-ready.
+Topics to Learn
+Well-Architected Framework
+High Availability
+Scalability
+Fault Tolerance
+Cost Optimization
+📘 Documentation:
+https://docs.aws.amazon.com/wellarchitected/�
+https://aws.amazon.com/architecture/�
+Jobs() {
+                    Create Job-Opening
                 </button>
               )}
             </div>
