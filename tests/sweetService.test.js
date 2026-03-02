@@ -239,128 +239,127 @@ Cost Optimization
 📘 Documentation:
 https://docs.aws.amazon.com/wellarchitected/�
 https://aws.amazon.com/architecture/�
-Jobs() {
-                    Create Job-Opening
-                </button>
-              )}
-            </div>
-            
-            <div className="space-y-4">
-              {loading ? (
-                <div className="flex justify-center py-10"><Loader size={32} /></div>
-              ) : jobs.length === 0 ? (
-                <div className="text-center py-10 text-gray-500">
-                  "No active jobs yet!!!"
-                </div>
-              ) : (
-                jobs.map((job) => (
-                  <div
-                    key={job.id}
-                    className="bg-white shadow rounded-lg p-4 border border-gray-200 flex items-start gap-4"
-                  >
-                    <div className="flex-1">
-                      <p className="text-sm text-gray-500">Title</p>
-                      <p className="font-medium text-gray-800">{job.title}</p>
-                      <p className="text-sm text-gray-500">Hr-Name</p>
-                      <p className="font-medium text-gray-800">
-                        {job.hrOwnerName}
-                      </p>
-                      <p className="text-sm text-gray-500">Status</p>
-                      <p className="font-medium text-gray-800">
-                        {job.status}
-                      </p>
-                      <p className="text-sm text-gray-500">Summary</p>
-                      <p className="font-medium text-gray-800">
-                        {job.summary}
-                      </p>
-                      <p className="text-sm text-gray-500">Description</p>
-                      <p className="font-medium text-gray-800">
-                        {job.description}
-                      </p>
-                      <div className="flex flex-row gap-2.5 flex-wrap">
-                        <a
-                          href={job.jdFileUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="w-auto px-3 mt-4 py-1 bg-black text-white text-sm rounded hover:bg-gray-700 flex items-center"
-                        >
-                          View Job-Description
-                        </a>
 
-                        <button
-                          onClick={() => navigate(`share/${job.id}`)}
-                          className="w-auto bg-black text-white text-sm py-1 px-3 mt-4 rounded hover:bg-gray-700 "
-                        >
-                          Share
-                        </button>
-                        <button
-                          onClick={() => navigate(`referr/${job.id}`)}
-                          className="w-auto bg-black text-white text-sm py-1 px-3 mt-4 rounded hover:bg-gray-700 "
-                        >
-                          Refer
-                        </button>
-                        {authUser.role === "HR" && (
-                          <>
-                            <button
-                              onClick={() => closeJobOpening(job.id)}
-                              className="w-auto bg-black text-white text-sm py-1 px-3 mt-4 rounded hover:bg-gray-700 "
-                            >
-                              Close Job-Opening
-                            </button>
-                            <button
-                              onClick={() => navigate(`/job-referrals/${job.id}`)}
-                              className="w-auto bg-black text-white text-sm py-1 px-3 mt-4 rounded hover:bg-gray-700 "
-                            >
-                              All-referral
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* NEW: Pagination Controls Footer */}
-            {!loading && jobs.length > 0 && (
-              <div className="flex justify-between items-center mt-8 pt-4 border-t border-gray-200">
-                <button
-                  onClick={handlePreviousPage}
-                  disabled={currentPage === 0}
-                  className={`px-4 py-2 rounded font-medium ${
-                    currentPage === 0
-                      ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                      : "bg-black text-white hover:bg-gray-800"
-                  }`}
-                >
-                  Previous
-                </button>
-                
-                <span className="text-sm text-gray-600 font-medium">
-                  Page {currentPage + 1} of {totalPages === 0 ? 1 : totalPages}
-                </span>
-                
-                <button
-                  onClick={handleNextPage}
-                  disabled={isLastPage}
-                  className={`px-4 py-2 rounded font-medium ${
-                    isLastPage
-                      ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                      : "bg-black text-white hover:bg-gray-800"
-                  }`}
-                >
-                  Next
-                </button>
-              </div>
-            )}
-            
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
-
-export default Jobs;
-                    
+Kafka Learning Path (Step-by-Step)
+🔹 STEP 1: What is Kafka & Why It Exists (FOUNDATION)
+Before concepts, understand the problem Kafka solves.
+Learn These Concepts
+What is event streaming?
+Why Kafka was created
+Kafka vs traditional message queues
+Use cases (real-world examples)
+📘 Documentation:
+https://kafka.apache.org/intro�
+https://developer.confluent.io/learn/kafka/�
+👉 After this, you should clearly answer:
+“Why do companies use Kafka instead of REST or DB polling?”
+🔹 STEP 2: Core Kafka Architecture (MOST IMPORTANT)
+This is the heart of Kafka. Interview favorite.
+Architecture Components
+Broker
+Cluster
+Topic
+Partition
+Offset
+Replication
+Leader & Follower
+Zookeeper (basic) / KRaft (new)
+📘 Documentation:
+https://kafka.apache.org/documentation/#architecture�
+https://developer.confluent.io/learn/kafka/architecture/�
+🧠 Key idea to understand:
+Kafka is distributed + fault tolerant + high throughput
+🔹 STEP 3: Kafka Core Concepts (MUST KNOW)
+Do not skip this.
+Concepts
+Producer
+Consumer
+Consumer Group
+Message / Event
+Retention
+Ordering (per partition)
+At-least-once vs exactly-once (basic idea)
+📘 Documentation:
+https://kafka.apache.org/documentation/#design�
+https://developer.confluent.io/learn/kafka/core-concepts/�
+🔹 STEP 4: Topics & Partitions (DEEP UNDERSTANDING)
+This affects scalability & performance.
+Learn
+Why partitions matter
+How Kafka scales
+Partition key
+Ordering guarantee
+Rebalancing
+📘 Documentation:
+https://kafka.apache.org/documentation/#intro_topics�
+https://developer.confluent.io/learn/kafka/partitions/�
+🔹 STEP 5: Producers (How Data Is Written)
+Developer-focused.
+Learn
+How producer sends messages
+Acknowledgements (acks)
+Batching & compression
+Idempotent producer (concept)
+📘 Documentation:
+https://kafka.apache.org/documentation/#producerapi�
+https://developer.confluent.io/learn/kafka/producer/�
+🔹 STEP 6: Consumers (How Data Is Read)
+Very important for real systems.
+Learn
+Polling model
+Offset commit
+Auto vs manual commit
+Consumer groups & rebalancing
+📘 Documentation:
+https://kafka.apache.org/documentation/#consumerapi�
+https://developer.confluent.io/learn/kafka/consumer/�
+🔹 STEP 7: Message Delivery Semantics
+Interview + system design topic.
+Learn
+At-most-once
+At-least-once
+Exactly-once (high-level)
+When duplicates happen
+📘 Documentation:
+https://kafka.apache.org/documentation/#semantics�
+https://developer.confluent.io/learn/kafka/message-delivery-semantics/�
+🔹 STEP 8: Kafka Storage & Retention
+Kafka is not just a queue.
+Learn
+Log-based storage
+Retention by time vs size
+Compaction
+Why Kafka can replay events
+📘 Documentation:
+https://kafka.apache.org/documentation/#log�
+https://developer.confluent.io/learn/kafka/log-compaction/�
+🔹 STEP 9: Kafka vs Other Systems (WHERE TO USE)
+This helps you decide when to use Kafka.
+Learn
+Kafka vs RabbitMQ
+Kafka vs REST
+Kafka vs Database
+When NOT to use Kafka
+📘 Documentation:
+https://developer.confluent.io/learn/kafka/kafka-vs-rabbitmq/�
+https://developer.confluent.io/learn/kafka/use-cases/�
+🔹 STEP 10: Real-World Use Cases (VERY IMPORTANT)
+This makes you sound experienced.
+Common Use Cases
+Microservices communication
+Event-driven architecture
+Log aggregation
+Real-time analytics
+Data pipelines
+Audit logs
+📘 Documentation:
+https://kafka.apache.org/uses�
+https://developer.confluent.io/learn/kafka/event-driven-architecture/�
+🔹 STEP 11: Kafka with Applications (Practical View)
+You don’t need deep coding yet—just concept.
+Learn
+Kafka with microservices
+Kafka with databases (CDC – intro)
+Kafka with cloud
+📘 Documentation:
+https://developer.confluent.io/learn/kafka/kafka-for-developers/�
