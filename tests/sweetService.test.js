@@ -1,70 +1,124 @@
-package com.HRMS.HRMS.dto;
-
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-import java.util.List;
-
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-@Builder
-public class PaginatedResponseDto<T> {
-    
-    private List<T> content;          // The actual array of data (e.g., List<JobOpeningResponseDto>)
-    private int pageNo;               // Current page number (starts at 0)
-    private int pageSize;             // Number of items per page
-    private long totalElements;       // Total number of items in the database
-    private int totalPages;           // Total number of pages
-    private boolean last;             // Is this the last page?
-    
-    }
-    public PaginatedResponseDto<JobOpeningResponseDto> getAllActiveJobs(int pageNo, int pageSize) {
-        
-        // 1. Create the Pageable object (Spring uses this to generate the LIMIT and OFFSET SQL)
-        Pageable pageable = PageRequest.of(pageNo, pageSize);
-
-        // 2. Fetch the paginated data from the database
-        Page<JobOpening> jobsPage = jobRepo.findByStatus(JobOpening.JobStatus.ACTIVE, pageable);
-
-        // 3. Extract the actual list of jobs and map them to your DTOs
-        List<JobOpeningResponseDto> content = jobsPage.getContent().stream()
-                .map(this::mapToResponse)
-                .toList();
-
-        // 4. Build and return your custom PaginatedResponseDto using Lombok's Builder
-        return PaginatedResponseDto.<JobOpeningResponseDto>builder()
-                .content(content)
-                .pageNo(jobsPage.getNumber())
-                .pageSize(jobsPage.getSize())
-                .totalElements(jobsPage.getTotalElements())
-                .totalPages(jobsPage.getTotalPages())
-                .last(jobsPage.isLast())
-                .build();
-    }
-    @GetMapping("/active")
-    public ResponseEntity<PaginatedResponseDto<JobOpeningResponseDto>> getAllActiveJobs(
-            @RequestParam(defaultValue = "0", required = false) int pageNo,
-            @RequestParam(defaultValue = "10", required = false) int pageSize
-    ) {
-        return ResponseEntity.ok(jobOpeningService.getAllActiveJobs(pageNo, pageSize));
-        }
-// Services/jobService.js
-export const getAllActiveJobs = async (pageNo = 0, pageSize = 10) => {
-  // Pass the parameters exactly as your Spring Boot controller expects them
-  return await axios.get(`/api/jobs/active?pageNo=${pageNo}&pageSize=${pageSize}`);
-};
-import React, { useEffect, useState } from "react";
-import { getAllActiveJobs, updateJobStatus } from "../../Services/jobService";
-import { Loader } from "../../components/ui/Loader";
-import { handleGlobalError } from "../../Services/GlobalExceptionService";
-import { useAuthUserContext } from "../../Contexts/AuthUserContext";
-import { useNavigate } from "react-router-dom";
-import { toast } from "react-toastify";
-
-function Jobs() {
+Great idea 👍
+Here’s a focused .NET revision checklist (perfect for 1–2 days) with official documentation links so you revise from the right sources.
+🔹 1. C# Core (VERY IMPORTANT)
+Revise these first — they’re asked everywhere.
+Topics
+Data types & variables
+var vs explicit types
+ref, out, in
+Value types vs Reference types
+string vs StringBuilder
+Nullable types (?)
+Enums & Structs
+📘 Docs:
+https://learn.microsoft.com/en-us/dotnet/csharp/tour-of-csharp/�
+https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/�
+🔹 2. OOP in .NET
+You must be strong here.
+Topics
+Encapsulation, Inheritance, Polymorphism, Abstraction
+Abstract class vs Interface
+Method overloading vs overriding
+Virtual / Override / Sealed
+this & base
+SOLID principles (basic understanding)
+📘 Docs:
+https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/object-oriented/�
+https://learn.microsoft.com/en-us/dotnet/standard/modern-web-apps-azure-architecture/architectural-principles�
+🔹 3. Collections & Generics
+Very common interview area.
+Topics
+List<T>, Dictionary<TKey,TValue>, HashSet<T>
+IEnumerable, ICollection, IList
+Array vs List
+Generics basics
+📘 Docs:
+https://learn.microsoft.com/en-us/dotnet/standard/collections/�
+https://learn.microsoft.com/en-us/dotnet/csharp/programming-guide/generics/�
+🔹 4. LINQ (Must Revise)
+Interviewers love LINQ.
+Topics
+Where, Select, SelectMany
+First, FirstOrDefault, Single
+Any, All, Count
+GroupBy, OrderBy
+Deferred vs Immediate execution
+📘 Docs:
+https://learn.microsoft.com/en-us/dotnet/csharp/programming-guide/concepts/linq/�
+https://learn.microsoft.com/en-us/dotnet/csharp/linq/�
+🔹 5. Exception Handling
+Basic but important.
+Topics
+try-catch-finally
+Custom exceptions
+throw vs throw ex
+Global exception handling
+📘 Docs:
+https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/exceptions/�
+🔹 6. ASP.NET Core (VERY IMPORTANT if you’re a web dev)
+If you’re applying for backend/full-stack roles, don’t skip this.
+Topics
+MVC vs Web API
+Controllers & Routing
+Dependency Injection (DI)
+Middleware
+Model Binding & Validation
+Filters
+Configuration (appsettings.json)
+Logging
+📘 Docs:
+https://learn.microsoft.com/en-us/aspnet/core/introduction-to-aspnet-core�
+https://learn.microsoft.com/en-us/aspnet/core/fundamentals/�
+🔹 7. Entity Framework Core
+Frequently asked with real-world questions.
+Topics
+DbContext & DbSet
+Code First approach
+Migrations
+LINQ with EF
+Tracking vs No Tracking
+Lazy vs Eager Loading
+📘 Docs:
+https://learn.microsoft.com/en-us/ef/core/�
+https://learn.microsoft.com/en-us/ef/core/querying/�
+🔹 8. Async Programming
+Short but very important.
+Topics
+async / await
+Task vs Thread
+Deadlocks (basic idea)
+📘 Docs:
+https://learn.microsoft.com/en-us/dotnet/csharp/asynchronous-programming/�
+🔹 9. .NET Runtime & Basics
+Good for conceptual questions.
+Topics
+CLR
+Garbage Collection
+Managed vs Unmanaged code
+.NET vs .NET Core vs .NET Framework
+📘 Docs:
+https://learn.microsoft.com/en-us/dotnet/core/introduction�
+https://learn.microsoft.com/en-us/dotnet/standard/garbage-collection/�
+🔹 10. SQL & API Integration (Quick Revision)
+Since you’re from IT background, revise basics.
+Topics
+CRUD operations
+REST API concepts
+HTTP verbs & status codes
+📘 Docs:
+https://learn.microsoft.com/en-us/aspnet/core/web-api/�
+🔥 1-Day Smart Revision Order
+If time is limited, follow this order:
+C# Core + OOP
+LINQ + Collections
+ASP.NET Core + DI
+EF Core basics
+Async + Exceptions
+If you want, I can:
+✅ Give interview questions + answers
+✅ Create a 1-day or 2-day revision timetable
+✅ Ask you mock interview questions based on your level
+Just tell me 👌 Jobs() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   
