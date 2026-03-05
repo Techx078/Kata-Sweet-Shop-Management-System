@@ -1,151 +1,42 @@
-Implementing Google OAuth2 in a decoupled Spring Boot and React application requires a specific flow. Because your React app needs a JWT to make API calls, we have to use Google to verify the user's identity, and then have Spring Boot generate your standard JWT.
-Here is the exact step-by-step process and the code required to bridge Google authentication with your existing JWT system.
-Step 1: Spring Boot Dependencies & Configuration
-First, add the OAuth2 client dependency to your backend.
-pom.xml
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-oauth2-client</artifactId>
-</dependency>
-Next, add your Google credentials to your configuration file. You get these from the Google Cloud Console.
-application.yml
-spring:
-  security:
-    oauth2:
-      client:
-        registration:
-          google:
-            client-id: YOUR_GOOGLE_CLIENT_ID
-            client-secret: YOUR_GOOGLE_CLIENT_SECRET
-            scope: profile, email
-            # Spring Boot handles this route automatically:
-            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
-Step 2: The OAuth2 Success Handler (The Bridge)
-When a user successfully logs in with Google, Spring Boot needs to intercept that success, check if the Google email matches an employee in your database, generate a JWT, and redirect back to React.
-Create a new class called OAuth2LoginSuccessHandler.
-OAuth2LoginSuccessHandler.java
-package com.HRMS.HRMS.security;
-
-import com.HRMS.HRMS.entity.Employee;
-import com.HRMS.HRMS.exception.ResourceNotFoundException;
-import com.HRMS.HRMS.repository.EmployeeRepository;
-// Import your JWT utility class here
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.core.user.OAuth2User;
-import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
-import org.springframework.stereotype.Component;
-
-import java.io.IOException;
-
-@Component
-@RequiredArgsConstructor
-public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
-
-    private final EmployeeRepository employeeRepository;
-    // Inject whatever service you currently use to generate JWTs
-    private final JwtService jwtService; 
-
-    @Value("${frontend.url}") // e.g., http://localhost:3000
-    private String frontendUrl;
-
-    @Override
-    public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
-        
-        // 1. Get the Google User details
-        OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
-        String email = oAuth2User.getAttribute("email");
-
-        // 2. Check if this email exists in your HRMS database
-        Employee employee = employeeRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("Employee not found with email: " + email));
-
-        // 3. Generate your standard JWT Token using your existing logic
-        // (You might need to wrap the employee in your CustomUserPrincipal first depending on your setup)
-        String jwtToken = jwtService.generateToken(employee);
-
-        // 4. Redirect to the React frontend with the token in the URL
-        String targetUrl = frontendUrl + "/oauth2/redirect?token=" + jwtToken;
-        response.sendRedirect(targetUrl);
-    }
-}
-Step 3: Update Spring Security Configuration
-Now, tell your SecurityFilterChain to use OAuth2 and attach the success handler you just built.
-// ... inside your SecurityFilterChain bean ...
-
-    http
-        // Your existing rules...
-        .authorizeHttpRequests(auth -> auth
-            .requestMatchers("/api/auth/**", "/oauth2/**").permitAll()
-            .anyRequest().authenticated()
-        )
-        // Add OAuth2 Login
-        .oauth2Login(oauth2 -> oauth2
-            .successHandler(oAuth2LoginSuccessHandler) // Inject your custom handler here
-        );
-
-// ...
-Step 4: React Frontend - The Login Button
-On your React login page, do not use Axios or fetch for the Google button. You must redirect the entire browser window to Spring Boot's automatic OAuth2 endpoint.
-LoginPage.jsx
-const handleGoogleLogin = () => {
-  // Redirect directly to the Spring Boot OAuth2 authorization endpoint
-  window.location.href = "http://localhost:8080/oauth2/authorization/google";
-};
-
-return (
-  <div>
-    <button onClick={handleGoogleLogin} className="bg-blue-600 text-white px-4 py-2 rounded">
-      Sign in with Google
-    </button>
-  </div>
-);
-Step 5: React Frontend - The Token Catcher Component
-After the Google login succeeds, Spring Boot redirects the user back to React at http://localhost:3000/oauth2/redirect?token=YOUR_JWT_HERE. You need a component to catch this URL, extract the token, and log the user in.
-OAuth2RedirectHandler.jsx
-import React, { useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { useAuthUserContext } from "../../Contexts/AuthUserContext";
-import { Loader } from "../../components/ui/Loader";
-
-const OAuth2RedirectHandler = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { setAuthUser } = useAuthUserContext();
-
-  useEffect(() => {
-    // 1. Extract the token from the URL query parameters
-    const queryParams = new URLSearchParams(location.search);
-    const token = queryParams.get("token");
-
-    if (token) {
-      // 2. Save the token (e.g., to localStorage)
-      localStorage.setItem("jwt_token", token);
-      
-      // 3. Update your Auth Context (you might need to decode the token 
-      // or fetch the user profile from the backend here)
-      setAuthUser({ isAuthenticated: true, token: token });
-
-      // 4. Redirect to the dashboard
-      navigate("/dashboard");
-    } else {
-      // If something went wrong, send them back to login
-      navigate("/login?error=oauth2_failed");
-    }
-  }, [location, navigate, setAuthUser]);
-
-  return (
-    <div className="flex justify-center items-center h-screen">
-      <Loader size={48} />
-      <p className="ml-4 text-gray-600">Authenticating...</p>
-    </div>
-  );
-};
-
-export default OAuth2RedirectHandler;
-Finally, don't forget to register this new component in your React Router setup:
-This workflow ensures that even though the user is authenticating through Google, your HRMS application still relies entirely on the same JWTs you have been using all along!
+Getting those credentials from Google can feel like a maze the first time you do it, but once you know exactly which buttons to click, it only takes a few minutes.
+Here is the exact step-by-step process to generate your client-id and client-secret in the Google Cloud Console and plug them into your Spring Boot HRMS app.
+Step 1: Create a Google Cloud Project
+Go to the Google Cloud Console.
+Log in with your Google account.
+In the top-left corner, click the Project Dropdown (next to the Google Cloud logo) and click New Project.
+Give your project a name (e.g., HRMS-Local-Dev) and click Create.
+Once created, make sure that project is selected in the top dropdown menu.
+Step 2: Configure the OAuth Consent Screen
+Before Google gives you credentials, they want to know what the login screen should look like when employees try to log in.
+On the left sidebar, click APIs & Services, then click OAuth consent screen.
+Under "User Type", select External (this is easiest for local testing, even if you eventually want to lock it down to just your company's emails). Click Create.
+App Information: * App name: Roima HRMS (This is what users will see when logging in).
+User support email: Select your email address.
+Developer contact email: Enter your email address again at the very bottom.
+Leave the logo and app domains blank for now. Click Save and Continue.
+Scopes: You don't need to add anything here. The default email and profile scopes are automatically included. Click Save and Continue.
+Test Users: This is critical for local development! Because your app is in "Testing" mode, only specific emails can log in. Click Add Users and type in the exact Google email address you plan to use to test the login. Click Save and Continue.
+Step 3: Create the Credentials (The ID and Secret)
+Now that the consent screen is ready, we can generate the actual keys for your application.yml.
+On the left sidebar, click Credentials.
+At the top of the screen, click + Create Credentials, then select OAuth client ID.
+Under Application type, select Web application.
+Under Name, type something like Spring Boot Backend.
+Step 4: Configure the URIs (The Most Important Step)
+Google is extremely strict about security. If your Spring Boot app tries to redirect the user to a URL that Google doesn't explicitly recognize, Google will block the login with a redirect_uri_mismatch error.
+Scroll down on that same page to the URIs section:
+Authorized JavaScript origins:
+Click + Add URI.
+Enter: http://localhost:8080 (Your Spring Boot URL).
+Enter: http://localhost:3000 (Your React URL, just to be safe).
+Authorized redirect URIs: This must match your YAML file exactly. In your YAML, {baseUrl} translates to your server's host, and {registrationId} translates to google.
+Click + Add URI.
+Enter exactly this: http://localhost:8080/login/oauth2/code/google
+(Note: Make sure there is no trailing slash at the end!)
+Click Create at the bottom of the page.
+Step 5: Copy to Your YAML File
+A modal will pop up displaying "Your Client ID" and "Your Client Secret".
+Copy the Client ID and paste it into your application.yml replacing YOUR_GOOGLE_CLIENT_ID.
+Copy the Client Secret and paste it into your application.yml replacing YOUR_GOOGLE_CLIENT_SECRET.
+(Pro-Tip: Never commit your Client Secret to GitHub! If you are pushing this code to a public repository, use environment variables like ${GOOGLE_CLIENT_SECRET} in your YAML file and pass the actual secret in via your IDE configurations).
+Once you have these pasted in, your Spring Boot app is officially authorized to talk to Google.
