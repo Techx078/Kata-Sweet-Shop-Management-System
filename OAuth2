@@ -1,108 +1,297 @@
-Getting those credentials from Google can feel like a maze the first time you do it, but once you know exactly which buttons to click, it only takes a few minutes.
-Here is the exact step-by-step process to generate your client-id and client-secret in the Google Cloud Console and plug them into your Spring Boot HRMS app.
-Step 1: Create a Google Cloud Project
-Go to the Google Cloud Console.
-Log in with your Google account.
-In the top-left corner, click the Project Dropdown (next to the Google Cloud logo) and click New Project.
-Give your project a name (e.g., HRMS-Local-Dev) and click Create.
-Once created, make sure that project is selected in the top dropdown menu.
-Step 2: Configure the OAuth Consent Screen
-Before Google gives you credentials, they want to know what the login screen should look like when employees try to log in.
-On the left sidebar, click APIs & Services, then click OAuth consent screen.
-Under "User Type", select External (this is easiest for local testing, even if you eventually want to lock it down to just your company's emails). Click Create.
-App Information: * App name: Roima HRMS (This is what users will see when logging in).
-User support email: Select your email address.
-Developer contact email: Enter your email address again at the very bottom.
-Leave the logo and app domains blank for now. Click Save and Continue.
-Scopes: You don't need to add anything here. The default email and profile scopes are automatically included. Click Save and Continue.
-Test Users: This is critical for local development! Because your app is in "Testing" mode, only specific emails can log in. Click Add Users and type in the exact Google email address you plan to use to test the login. Click Save and Continue.
-Step 3: Create the Credentials (The ID and Secret)
-Now that the consent screen is ready, we can generate the actual keys for your application.yml.
-On the left sidebar, click Credentials.
-At the top of the screen, click + Create Credentials, then select OAuth client ID.
-Under Application type, select Web application.
-Under Name, type something like Spring Boot Backend.
-Step 4: Configure the URIs (The Most Important Step)
-Google is extremely strict about security. If your Spring Boot app tries to redirect the user to a URL that Google doesn't explicitly recognize, Google will block the login with a redirect_uri_mismatch error.
-Scroll down on that same page to the URIs section:
-Authorized JavaScript origins:
-Click + Add URI.
-Enter: http://localhost:8080 (Your Spring Boot URL).
-Enter: http://localhost:3000 (Your React URL, just to be safe).
-Authorized redirect URIs: This must match your YAML file exactly. In your YAML, {baseUrl} translates to your server's host, and {registrationId} translates to google.
-Click + Add URI.
-Enter exactly this: http://localhost:8080/login/oauth2/code/google
-(Note: Make sure there is no trailing slash at the end!)
-Click Create at the bottom of the page.
-Step 5: Copy to Your YAML File
-A modal will pop up displaying "Your Client ID" and "Your Client Secret".
-Copy the Client ID and paste it into your application.yml replacing YOUR_GOOGLE_CLIENT_ID.
-Copy the Client Secret and paste it into your application.yml replacing YOUR_GOOGLE_CLIENT_SECRET.
-(Pro-Tip: Never commit your Client Secret to GitHub! If you are pushing this code to a public repository, use environment variables like ${GOOGLE_CLIENT_SECRET} in your YAML file and pass the actual secret in via your IDE configurations).
-Once you have these pasted in, your Spring Boot app is officially authorized to talk to Google.
-package com.HRMS.HRMS.security;
+public void sendAssignedMail(Employee emp , Travel travel){
+        String body = emailContentBuilder.buildEmail("travelAssign",new TravelEmailDto(
+                emp.getName(), travel.getDestination() , travel.getStartDate(), travel.getEndDate(),travel.getDescription()
+        ));
+        emailService.sendEmailWithAttachment(
+                new EmailSendingDto(
+                        body , emp.getEmail(),"Travel assigned to you !",null
+                )
+        );
+    }
+package com.HRMS.HRMS.repository;
 
+import com.HRMS.HRMS.entity.OtpToken;
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.Optional;
+
+public interface OtpTokenRepository extends JpaRepository<OtpToken, Long> {
+    Optional<OtpToken> findByEmail(String email);
+    void deleteByEmail(String email);
+}
+package com.HRMS.HRMS.dto.AuthDtos;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+
+@Data
+public class ForgotPasswordRequestDto {
+    private String email;
+}
+
+@Data
+public class VerifyOtpRequestDto {
+    private String email;
+    private String otp;
+}
+
+@Data
+@AllArgsConstructor
+public class OtpEmailDto {
+    private String name;
+    private String otp;
+}
+package com.HRMS.HRMS.service;
+
+import com.HRMS.HRMS.dto.AuthDtos.OtpEmailDto;
+import com.HRMS.HRMS.dto.EmailDtos.EmailSendingDto;
+import com.HRMS.HRMS.entity.Employee;
+import com.HRMS.HRMS.entity.OtpToken;
+import com.HRMS.HRMS.exception.ResourceNotFoundException;
+import com.HRMS.HRMS.repository.EmployeeRepository;
+import com.HRMS.HRMS.repository.OtpTokenRepository;
+import com.HRMS.HRMS.service.Email.EmailContentBuilder;
+import com.HRMS.HRMS.service.Email.EmailService;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.web.cors.CorsConfiguration;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
-import java.util.List;
+import java.time.LocalDateTime;
+import java.util.Random;
 
-@Configuration
-@EnableWebSecurity
+@Service
 @RequiredArgsConstructor
-public class SecurityConfig {
+@Slf4j
+public class PasswordResetService {
 
-    private final JwtAuthenticationFilter jwtAuthFilter; // Your existing JWT filter
-    private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler; // The bridge we built
+    private final EmployeeRepository employeeRepository;
+    private final OtpTokenRepository otpTokenRepository;
+    private final EmailContentBuilder emailContentBuilder;
+    private final EmailService emailService;
 
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-            // 1. Disable CSRF (Standard for JWT/Token-based APIs)
-            .csrf(csrf -> csrf.disable())
-            
-            // 2. Configure CORS so React (localhost:3000) can talk to Spring Boot
-            .cors(cors -> cors.configurationSource(request -> {
-                CorsConfiguration config = new CorsConfiguration();
-                config.setAllowedOrigins(List.of("http://localhost:3000"));
-                config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-                config.setAllowedHeaders(List.of("*"));
-                config.setAllowCredentials(true);
-                return config;
-            }))
+    @Transactional
+    public void generateAndSendOtp(String email) {
+        // 1. Check if email exists in your system
+        Employee employee = employeeRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("No account found with this email address."));
 
-            // 3. Endpoint Permissions
-            .authorizeHttpRequests(auth -> auth
-                // Allow public access to auth endpoints and OAuth2 redirects
-                .requestMatchers("/api/auth/**", "/oauth2/**", "/login/**").permitAll()
-                // Secure everything else (Requires either a JWT or an active login)
-                .anyRequest().authenticated()
-            )
+        // 2. Generate a 6-digit OTP
+        String otp = String.format("%06d", new Random().nextInt(999999));
 
-            // 4. Configure OAuth2 Login for Google
-            .oauth2Login(oauth2 -> oauth2
-                // When Google login succeeds, trigger our custom handler to generate the JWT
-                .successHandler(oAuth2LoginSuccessHandler)
-            )
+        // 3. Delete any existing OTPs for this user so they don't pile up
+        otpTokenRepository.deleteByEmail(email);
 
-            // 5. Session Management
-            // We keep it STATELESS because we want to rely on our JWTs, not server-side sessions
-            .sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-            )
+        // 4. Save new OTP to database (Valid for 10 minutes)
+        OtpToken otpToken = new OtpToken();
+        otpToken.setEmail(email);
+        otpToken.setOtp(otp);
+        otpToken.setExpiryDate(LocalDateTime.now().plusMinutes(10));
+        otpTokenRepository.save(otpToken);
 
-            // 6. Inject the JWT Filter
-            // This tells Spring: "Before trying to authenticate a user with a username/password, 
-            // check if they sent a valid JWT in the header!"
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+        // 5. Send the email using your existing Thymeleaf setup
+        sendOtpMail(employee, otp);
+        log.info("OTP generated and sent to {}", email);
+    }
 
-        return http.build();
+    public boolean verifyOtp(String email, String otp) {
+        // 1. Find the OTP token in the database
+        OtpToken otpToken = otpTokenRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("No OTP found for this email."));
+
+        // 2. Check if the OTP is expired
+        if (otpToken.getExpiryDate().isBefore(LocalDateTime.now())) {
+            otpTokenRepository.delete(otpToken); // Clean it up
+            throw new IllegalArgumentException("OTP has expired. Please request a new one.");
+        }
+
+        // 3. Check if the OTP matches
+        if (!otpToken.getOtp().equals(otp)) {
+            throw new IllegalArgumentException("Invalid OTP.");
+        }
+
+        // 4. If everything is good, we delete the OTP so it can't be reused
+        otpTokenRepository.delete(otpToken);
+        log.info("OTP successfully verified for {}", email);
+        
+        return true;
+    }
+
+    private void sendOtpMail(Employee emp, String otp) {
+        // NOTE: Make sure you create a "forgotPassword.html" template in your resources/templates folder!
+        String body = emailContentBuilder.buildEmail("forgotPassword", new OtpEmailDto(
+                emp.getName(), otp
+        ));
+        emailService.sendEmailWithAttachment(
+                new EmailSendingDto(
+                        body, emp.getEmail(), "Your Password Reset OTP", null
+                )
+        );
     }
 }
+package com.HRMS.HRMS.controller;
+
+import com.HRMS.HRMS.dto.AuthDtos.ForgotPasswordRequestDto;
+import com.HRMS.HRMS.dto.AuthDtos.VerifyOtpRequestDto;
+import com.HRMS.HRMS.service.PasswordResetService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/auth")
+@RequiredArgsConstructor
+public class PasswordResetController {
+
+    private final PasswordResetService passwordResetService;
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<String> forgotPassword(@RequestBody ForgotPasswordRequestDto request) {
+        // If the email doesn't exist, this will throw your ResourceNotFoundException
+        // which your GlobalExceptionHandler will catch and send to the frontend.
+        passwordResetService.generateAndSendOtp(request.getEmail());
+        return ResponseEntity.ok("OTP sent to your email address.");
+    }
+
+    @PostMapping("/verify-otp")
+    public ResponseEntity<String> verifyOtp(@RequestBody VerifyOtpRequestDto request) {
+        // If it fails, it throws an IllegalArgumentException caught by your global handler.
+        passwordResetService.verifyOtp(request.getEmail(), request.getOtp());
+        return ResponseEntity.ok("OTP verified successfully.");
+    }
+}
+import axios from "axios";
+
+// Step 1: Request the OTP
+export const requestPasswordReset = async (email) => {
+  return await axios.post(`/api/auth/forgot-password`, { email });
+};
+
+// Step 2: Verify the OTP
+export const verifyOtp = async (email, otp) => {
+  return await axios.post(`/api/auth/verify-otp`, { email, otp });
+};
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
+import { requestPasswordReset, verifyOtp } from "../../Services/AuthService";
+import { handleGlobalError } from "../../Services/GlobalExceptionService";
+
+function ForgotPassword() {
+  const [step, setStep] = useState(1); // Step 1: Email, Step 2: OTP, Step 3: Reset
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  // Handle Step 1: Sending the email
+  const handleSendOtp = async (e) => {
+    e.preventDefault();
+    if (!email) {
+      toast.warn("Please enter your email address");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await requestPasswordReset(email);
+      toast.success(res.data || "OTP sent to your email!");
+      setStep(2); // Move to the OTP verification screen
+    } catch (error) {
+      handleGlobalError(error); // This will catch your ResourceNotFoundException
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle Step 2: Verifying the OTP
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault();
+    if (!otp || otp.length !== 6) {
+      toast.warn("Please enter a valid 6-digit OTP");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await verifyOtp(email, otp);
+      toast.success(res.data || "OTP Verified!");
+      
+      // Move to step 3 (You will build the Reset Password form next)
+      setStep(3); 
+    } catch (error) {
+      handleGlobalError(error); // This will catch the expired/invalid OTP exceptions
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
+      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
+        
+        {/* Header */}
+        <div className="text-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">
+            {step === 1 ? "Forgot Password" : step === 2 ? "Enter OTP" : "Reset Password"}
+          </h2>
+          <p className="text-sm text-gray-500 mt-2">
+            {step === 1
+              ? "Enter your registered email and we'll send you a 6-digit OTP."
+              : step === 2
+              ? `We sent a code to ${email}`
+              : "Create a new, strong password."}
+          </p>
+        </div>
+
+        {/* STEP 1: Email Input Form */}
+        {step === 1 && (
+          <form onSubmit={handleSendOtp} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1 text-gray-700">Email Address</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email..."
+                className="border border-gray-300 rounded px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-black"
+                required
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-black text-white font-medium py-2 rounded hover:bg-gray-800 transition disabled:bg-gray-400"
+            >
+              {loading ? "Sending..." : "Send OTP"}
+            </button>
+            <div className="text-center mt-4">
+              <button 
+                type="button" 
+                onClick={() => navigate("/login")} 
+                className="text-sm text-blue-600 hover:underline"
+              >
+                Back to Login
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* STEP 2: OTP Verification Form */}
+        {step === 2 && (
+          <form onSubmit={handleVerifyOtp} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1 text-gray-700">6-Digit OTP</label>
+              <input
+                type="text"
+                maxLength="6"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, ''))} // Only allow numbers
+                placeholder="------"
+                className="border border-gray-300 rounded px-3 py-2 w-full text-center tracking-widest text-lg focus:outline-none focus:ring-2 focus:ring-black"
+                required
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="
