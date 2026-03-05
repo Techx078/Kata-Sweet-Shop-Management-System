@@ -40,3 +40,69 @@ Copy the Client ID and paste it into your application.yml replacing YOUR_GOOGLE_
 Copy the Client Secret and paste it into your application.yml replacing YOUR_GOOGLE_CLIENT_SECRET.
 (Pro-Tip: Never commit your Client Secret to GitHub! If you are pushing this code to a public repository, use environment variables like ${GOOGLE_CLIENT_SECRET} in your YAML file and pass the actual secret in via your IDE configurations).
 Once you have these pasted in, your Spring Boot app is officially authorized to talk to Google.
+package com.HRMS.HRMS.security;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+
+import java.util.List;
+
+@Configuration
+@EnableWebSecurity
+@RequiredArgsConstructor
+public class SecurityConfig {
+
+    private final JwtAuthenticationFilter jwtAuthFilter; // Your existing JWT filter
+    private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler; // The bridge we built
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            // 1. Disable CSRF (Standard for JWT/Token-based APIs)
+            .csrf(csrf -> csrf.disable())
+            
+            // 2. Configure CORS so React (localhost:3000) can talk to Spring Boot
+            .cors(cors -> cors.configurationSource(request -> {
+                CorsConfiguration config = new CorsConfiguration();
+                config.setAllowedOrigins(List.of("http://localhost:3000"));
+                config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+                config.setAllowedHeaders(List.of("*"));
+                config.setAllowCredentials(true);
+                return config;
+            }))
+
+            // 3. Endpoint Permissions
+            .authorizeHttpRequests(auth -> auth
+                // Allow public access to auth endpoints and OAuth2 redirects
+                .requestMatchers("/api/auth/**", "/oauth2/**", "/login/**").permitAll()
+                // Secure everything else (Requires either a JWT or an active login)
+                .anyRequest().authenticated()
+            )
+
+            // 4. Configure OAuth2 Login for Google
+            .oauth2Login(oauth2 -> oauth2
+                // When Google login succeeds, trigger our custom handler to generate the JWT
+                .successHandler(oAuth2LoginSuccessHandler)
+            )
+
+            // 5. Session Management
+            // We keep it STATELESS because we want to rely on our JWTs, not server-side sessions
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            )
+
+            // 6. Inject the JWT Filter
+            // This tells Spring: "Before trying to authenticate a user with a username/password, 
+            // check if they sent a valid JWT in the header!"
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+}
