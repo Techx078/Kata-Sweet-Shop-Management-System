@@ -135,3 +135,22 @@ public class OrgChartControllerTest {
                 .andExpect(jsonPath("$.data").exists());
     }
 }
+# Database Connection Settings
+spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+spring.datasource.driverClassName=org.h2.Driver
+spring.datasource.username=sa
+spring.datasource.password=
+
+# Hibernate & JPA Settings
+spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+# This drops and recreates the tables for every test run to keep the database clean
+spring.jpa.hibernate.ddl-auto=create-drop
+# Prints the SQL queries to your console so you can see what Hibernate is doing
+spring.jpa.show-sql=true
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test") // <-- This tells Spring to load application-test.properties
+public class OrgChartControllerIntegrationTest {
+    // ... your test code remains exactly the same
+}
+application-test.properties
