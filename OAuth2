@@ -1,156 +1,330 @@
-spring:
-  datasource:
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-    driverClassName: org.h2.Driver
-    username: sa
-    password:
-  jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
-    # This tells Hibernate to create the tables fresh every time the test runs
-    hibernate:
-      ddl-auto: create-drop
-    show-sql: true
-package com.HRMS.HRMS.Controllers.OrgChart;
+package com.HRMS.HRMS.service.OrgChart;
 
+import com.HRMS.HRMS.dto.OrgChart.OrgChartDto;
 import com.HRMS.HRMS.entity.Employee;
+import com.HRMS.HRMS.exception.ResourceNotFoundException;
 import com.HRMS.HRMS.repository.EmployeeRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.web.servlet.MockMvc;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.modelmapper.ModelMapper;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
-// 1. Boot up the entire application
-@SpringBootTest
-// 2. Give us the MockMvc tool to make HTTP requests
-@AutoConfigureMockMvc
-// 3. Tell Spring to use the "application-test.yml" file we just created
-@ActiveProfiles("test")
-public class OrgChartControllerIntegrationTest {
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
-    @Autowired
-    private MockMvc mockMvc;
+// 1. Tell JUnit to use Mockito to handle the @Mock and @InjectMocks annotations
+@ExtendWith(MockitoExtension.class)
+class OrgChartServiceTest {
 
-    // Notice we inject the REAL repository here, not a mock!
-    @Autowired
+    // 2. Mock the repository so we don't hit a real database
+    @Mock
     private EmployeeRepository employeeRepository;
 
-    @BeforeEach
-    public void setupDatabase() {
-        // Clear the H2 database before every test to ensure a clean slate
-        employeeRepository.deleteAll();
+    // 3. We use @Spy instead of @Mock for ModelMapper. 
+    // This allows the real ModelMapper to convert objects normally, saving us from writing dozens of mock rules for it.
+    @Spy
+    private ModelMapper modelMapper = new ModelMapper();
 
-        // Insert real test data into the H2 database
-        Employee emp = new Employee();
-        emp.setName("Test Employee");
-        emp.setEmail("test@roima.com");
-        // ... set other necessary fields
-        employeeRepository.save(emp);
-    }
-
-    @Test
-    public void testGetChartByEmail_Integration() throws Exception {
-        // Act & Assert
-        // This request will go through the Controller -> Service -> Repository -> H2 Database
-        mockMvc.perform(get("/org-chart/email/{email}", "test@roima.com")
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Org chart fetched"))
-                // Verify the actual data returned from the H2 database
-                .andExpect(jsonPath("$.data.email").value("test@roima.com"));
-    }
-}
-package com.HRMS.HRMS.Controllers.OrgChart;
-
-import com.HRMS.HRMS.dto.OrgChart.OrgChartDto;
-import com.HRMS.HRMS.service.Email.EmailService;
-import com.HRMS.HRMS.service.OrgChart.OrgChartService;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
-
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-
-// 1. @WebMvcTest loads ONLY the web layer (Controllers, Security), not the whole app/database.
-@WebMvcTest(OrgChartController.class)
-public class OrgChartControllerTest {
-
-    // 2. MockMvc allows us to simulate HTTP requests without starting a real Tomcat server
-    @Autowired
-    private MockMvc mockMvc;
-
-    // 3. @MockBean creates fake versions of your services and injects them into the Controller
-    @MockBean
+    // 4. Inject the mocks into the service we are testing
+    @InjectMocks
     private OrgChartService orgChartService;
 
-    @MockBean
-    private EmailService emailService;
+    private Employee ceo;
+    private Employee manager;
+    private Employee employee;
+
+    @BeforeEach
+    void setUp() {
+        // Build a fake company hierarchy before each test runs
+        
+        ceo = new Employee();
+        ceo.setId(1L);
+        ceo.setName("CEO John");
+        ceo.setEmail("ceo@roima.com");
+        ceo.setSubordinates(new ArrayList<>());
+
+        manager = new Employee();
+        manager.setId(2L);
+        manager.setName("Manager Jane");
+        manager.setEmail("jane@roima.com");
+        manager.setManager(ceo); // Link to CEO
+        manager.setSubordinates(new ArrayList<>());
+        ceo.getSubordinates().add(manager);
+
+        employee = new Employee();
+        employee.setId(3L);
+        employee.setName("Employee Rakesh");
+        employee.setEmail("rakesh@roima.com");
+        employee.setManager(manager); // Link to Manager
+        employee.setSubordinates(new ArrayList<>());
+        manager.getSubordinates().add(employee);
+    }
+
+    // --- Tests for getOrgChart(Long id) ---
 
     @Test
-    public void testGetChartByEmployeeId_ReturnsOk() throws Exception {
-        // Arrange: Create dummy data
-        Long testId = 1L;
-        OrgChartDto mockDto = new OrgChartDto();
-        // Assume OrgChartDto has a name field. Set dummy data here:
-        // mockDto.setName("Rakesh"); 
-        
-        // Arrange: Tell the mock service what to return when called
-        Mockito.when(orgChartService.getOrgChart(testId)).thenReturn(mockDto);
+    void getOrgChart_WhenEmployeeExists_ReturnsCompleteChart() {
+        // Arrange
+        when(employeeRepository.findById(3L)).thenReturn(Optional.of(employee));
 
-        // Act & Assert: Perform the GET request and verify the response
-        mockMvc.perform(get("/org-chart/id/{employeeId}", testId)
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk()) // Check if HTTP status is 200
-                .andExpect(jsonPath("$.message").value("Org chart fetched")) // Check your ApiResponse message
-                .andExpect(jsonPath("$.data").exists()); // Check that data is present
+        // Act
+        OrgChartDto result = orgChartService.getOrgChart(3L);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals("Employee Rakesh", result.getSelectedEmployee().getName());
+        
+        // Assert Direct Reports (Should be 0 for this leaf employee)
+        assertTrue(result.getDirectReports().isEmpty());
+
+        // Assert Path From Root (Should be CEO -> Manager)
+        assertEquals(2, result.getPathFromRoot().size());
+        assertEquals("CEO John", result.getPathFromRoot().get(0).getName());
+        assertEquals("Manager Jane", result.getPathFromRoot().get(1).getName());
     }
 
     @Test
-    public void testGetChartByEmail_ReturnsOk() throws Exception {
+    void getOrgChart_WhenEmployeeIsCeo_ReturnsChartWithEmptyAncestors() {
         // Arrange
-        String testEmail = "test@roima.com";
-        OrgChartDto mockDto = new OrgChartDto();
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(ceo));
+
+        // Act
+        OrgChartDto result = orgChartService.getOrgChart(1L);
+
+        // Assert
+        assertEquals("CEO John", result.getSelectedEmployee().getName());
         
-        // Tell the mock service to return our mockDto when this specific email is passed
-        Mockito.when(orgChartService.getOrgChartByName(testEmail)).thenReturn(mockDto);
+        // CEO has 1 direct report (Jane)
+        assertEquals(1, result.getDirectReports().size());
+        assertEquals("Manager Jane", result.getDirectReports().get(0).getName());
+
+        // CEO has no manager, so path from root should be completely empty
+        assertTrue(result.getPathFromRoot().isEmpty());
+    }
+
+    @Test
+    void getOrgChart_WhenEmployeeNotFound_ThrowsException() {
+        // Arrange
+        when(employeeRepository.findById(99L)).thenReturn(Optional.empty());
 
         // Act & Assert
-        mockMvc.perform(get("/org-chart/email/{email}", testEmail)
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Org chart fetched"))
-                .andExpect(jsonPath("$.data").exists());
+        assertThrows(ResourceNotFoundException.class, () -> {
+            orgChartService.getOrgChart(99L);
+        });
+        
+        // Verify that mapping was never attempted
+        verify(modelMapper, never()).map(any(), any());
+    }
+
+    // --- Tests for getOrgChartByName(String email) ---
+
+    @Test
+    void getOrgChartByName_WhenEmailExists_ReturnsCompleteChart() {
+        // Arrange
+        when(employeeRepository.findByEmail("jane@roima.com")).thenReturn(Optional.of(manager));
+
+        // Act
+        OrgChartDto result = orgChartService.getOrgChartByName("jane@roima.com");
+
+        // Assert
+        assertNotNull(result);
+        assertEquals("Manager Jane", result.getSelectedEmployee().getName());
+        
+        // Jane has 1 report (Rakesh)
+        assertEquals(1, result.getDirectReports().size());
+        assertEquals("Employee Rakesh", result.getDirectReports().get(0).getName());
+
+        // Jane has 1 ancestor (CEO John)
+        assertEquals(1, result.getPathFromRoot().size());
+        assertEquals("CEO John", result.getPathFromRoot().get(0).getName());
+    }
+
+    @Test
+    void getOrgChartByName_WhenEmailNotFound_ThrowsException() {
+        // Arrange
+        when(employeeRepository.findByEmail("unknown@roima.com")).thenReturn(Optional.empty());
+
+        // Act & Assert
+        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
+            orgChartService.getOrgChartByName("unknown@roima.com");
+        });
+        
+        assertEquals("Employee not found", exception.getMessage());
     }
 }
-# Database Connection Settings
-spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-spring.datasource.driverClassName=org.h2.Driver
-spring.datasource.username=sa
-spring.datasource.password=
+package com.HRMS.HRMS.repository.TravelRepositories;
 
-# Hibernate & JPA Settings
-spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
-# This drops and recreates the tables for every test run to keep the database clean
-spring.jpa.hibernate.ddl-auto=create-drop
-# Prints the SQL queries to your console so you can see what Hibernate is doing
-spring.jpa.show-sql=true
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test") // <-- This tells Spring to load application-test.properties
-public class OrgChartControllerIntegrationTest {
-    // ... your test code remains exactly the same
+import com.HRMS.HRMS.entity.Employee;
+import com.HRMS.HRMS.entity.TravelEntities.ExpenseType;
+import com.HRMS.HRMS.entity.TravelEntities.Travel;
+import com.HRMS.HRMS.entity.TravelEntities.TravelAssignment;
+import com.HRMS.HRMS.entity.TravelEntities.TravelExpense;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
+import org.springframework.test.context.ActiveProfiles;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
+// 1. @DataJpaTest disables full auto-configuration and applies only configuration relevant to JPA tests.
+@DataJpaTest
+@ActiveProfiles("test") // Uses your application-test.properties for H2
+public class TravelExpenseRepositoryTest {
+
+    @Autowired
+    private TravelExpenseRepository travelExpenseRepository;
+
+    // 2. TestEntityManager is an alternative to standard JPA EntityManager customized for tests.
+    // It is great for inserting setup data quickly.
+    @Autowired
+    private TestEntityManager entityManager;
+
+    private Employee employee;
+    private Travel travel;
+    private TravelAssignment assignment;
+    private ExpenseType foodExpenseType;
+    private LocalDate today;
+
+    @BeforeEach
+    void setUp() {
+        today = LocalDate.now();
+
+        // Step 1: Create and persist foundational entities
+        employee = new Employee();
+        employee.setName("Rakesh");
+        employee.setEmail("rakesh@roima.com");
+        entityManager.persist(employee);
+
+        travel = new Travel();
+        travel.setDestination("Mumbai");
+        entityManager.persist(travel);
+
+        assignment = new TravelAssignment();
+        assignment.setEmployee(employee);
+        assignment.setTravel(travel);
+        entityManager.persist(assignment);
+
+        foodExpenseType = new ExpenseType();
+        // Assuming your ExpenseType has a name field
+        // foodExpenseType.setName("FOOD"); 
+        entityManager.persist(foodExpenseType);
+
+        // Step 2: Create Test Expenses
+
+        // Expense 1: Valid, APPROVED, Food, Today
+        TravelExpense expense1 = new TravelExpense();
+        expense1.setTravelAssignment(assignment);
+        expense1.setExpenseType(foodExpenseType);
+        expense1.setDate(today);
+        expense1.setAmount(new BigDecimal("500.00"));
+        expense1.setStatus("APPROVED"); // Must match your query exactly
+        expense1.setCreatedAt(LocalDateTime.now().minusHours(2)); // Older
+        entityManager.persist(expense1);
+
+        // Expense 2: Valid, PENDING, Food, Today
+        TravelExpense expense2 = new TravelExpense();
+        expense2.setTravelAssignment(assignment);
+        expense2.setExpenseType(foodExpenseType);
+        expense2.setDate(today);
+        expense2.setAmount(new BigDecimal("300.00"));
+        expense2.setStatus("PENDING");
+        expense2.setCreatedAt(LocalDateTime.now().minusHours(1)); // Newer
+        entityManager.persist(expense2);
+
+        // Expense 3: REJECTED (Should be ignored by getDailyTotal), Food, Today
+        TravelExpense expense3 = new TravelExpense();
+        expense3.setTravelAssignment(assignment);
+        expense3.setExpenseType(foodExpenseType);
+        expense3.setDate(today);
+        expense3.setAmount(new BigDecimal("1000.00"));
+        expense3.setStatus("REJECTED");
+        expense3.setCreatedAt(LocalDateTime.now()); // Newest
+        entityManager.persist(expense3);
+
+        // Flush pushes the data to the in-memory database immediately
+        entityManager.flush(); 
+    }
+
+    // --- Tests for getDailyTotal ---
+
+    @Test
+    void getDailyTotal_SumsAmountsExcludingRejected() {
+        // Act: We expect it to sum Expense 1 (500) + Expense 2 (300) = 800. 
+        // Expense 3 is REJECTED, so it should be ignored.
+        BigDecimal dailyTotal = travelExpenseRepository.getDailyTotal(
+                employee.getId(), today, foodExpenseType.getId());
+
+        // Assert
+        assertEquals(0, new BigDecimal("800.00").compareTo(dailyTotal));
+    }
+
+    @Test
+    void getDailyTotal_WhenNoRecordsMatch_ReturnsZeroDueToCoalesce() {
+        // Act: Query for tomorrow (where no records exist)
+        BigDecimal dailyTotal = travelExpenseRepository.getDailyTotal(
+                employee.getId(), today.plusDays(1), foodExpenseType.getId());
+
+        // Assert: Your COALESCE(SUM(e.amount), 0) should catch the null and return 0
+        assertEquals(0, BigDecimal.ZERO.compareTo(dailyTotal));
+    }
+
+    // --- Tests for getTotalApprovedByTravelId ---
+
+    @Test
+    void getTotalApprovedByTravelId_SumsOnlyApprovedStatus() {
+        // Act: Only Expense 1 is APPROVED (500.00)
+        BigDecimal totalApproved = travelExpenseRepository.getTotalApprovedByTravelId(travel.getId());
+
+        // Assert
+        assertEquals(0, new BigDecimal("500.00").compareTo(totalApproved));
+    }
+
+    // --- Tests for getTotalAmountByAssignmentId ---
+
+    @Test
+    void getTotalAmountByAssignmentId_SumsOnlyApprovedStatus() {
+        // Act: Only Expense 1 is APPROVED (500.00)
+        BigDecimal totalApproved = travelExpenseRepository.getTotalAmountByAssignmentId(assignment.getId());
+
+        // Assert
+        assertEquals(0, new BigDecimal("500.00").compareTo(totalApproved));
+    }
+
+    // --- Tests for findTravelExpenseByTravelAssignment_IdOrderByCreatedAtDesc ---
+
+    @Test
+    void findTravelExpenseByTravelAssignment_IdOrderByCreatedAtDesc_ReturnsCorrectOrder() {
+        // Act
+        List<TravelExpense> expenses = travelExpenseRepository
+                .findTravelExpenseByTravelAssignment_IdOrderByCreatedAtDesc(assignment.getId());
+
+        // Assert
+        assertNotNull(expenses);
+        assertEquals(3, expenses.size());
+
+        // expense3 was created most recently, so it should be first [0]
+        assertEquals("REJECTED", expenses.get(0).getStatus());
+        
+        // expense2 was created 1 hour ago, so it should be second [1]
+        assertEquals("PENDING", expenses.get(1).getStatus());
+        
+        // expense1 was created 2 hours ago, so it should be last [2]
+        assertEquals("APPROVED", expenses.get(2).getStatus());
+    }
 }
-application-test.properties
