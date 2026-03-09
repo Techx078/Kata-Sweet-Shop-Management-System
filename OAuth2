@@ -1,297 +1,137 @@
-public void sendAssignedMail(Employee emp , Travel travel){
-        String body = emailContentBuilder.buildEmail("travelAssign",new TravelEmailDto(
-                emp.getName(), travel.getDestination() , travel.getStartDate(), travel.getEndDate(),travel.getDescription()
-        ));
-        emailService.sendEmailWithAttachment(
-                new EmailSendingDto(
-                        body , emp.getEmail(),"Travel assigned to you !",null
-                )
-        );
-    }
-package com.HRMS.HRMS.repository;
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driverClassName: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    # This tells Hibernate to create the tables fresh every time the test runs
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+package com.HRMS.HRMS.Controllers.OrgChart;
 
-import com.HRMS.HRMS.entity.OtpToken;
-import org.springframework.data.jpa.repository.JpaRepository;
-import java.util.Optional;
-
-public interface OtpTokenRepository extends JpaRepository<OtpToken, Long> {
-    Optional<OtpToken> findByEmail(String email);
-    void deleteByEmail(String email);
-}
-package com.HRMS.HRMS.dto.AuthDtos;
-
-import lombok.AllArgsConstructor;
-import lombok.Data;
-
-@Data
-public class ForgotPasswordRequestDto {
-    private String email;
-}
-
-@Data
-public class VerifyOtpRequestDto {
-    private String email;
-    private String otp;
-}
-
-@Data
-@AllArgsConstructor
-public class OtpEmailDto {
-    private String name;
-    private String otp;
-}
-package com.HRMS.HRMS.service;
-
-import com.HRMS.HRMS.dto.AuthDtos.OtpEmailDto;
-import com.HRMS.HRMS.dto.EmailDtos.EmailSendingDto;
 import com.HRMS.HRMS.entity.Employee;
-import com.HRMS.HRMS.entity.OtpToken;
-import com.HRMS.HRMS.exception.ResourceNotFoundException;
 import com.HRMS.HRMS.repository.EmployeeRepository;
-import com.HRMS.HRMS.repository.OtpTokenRepository;
-import com.HRMS.HRMS.service.Email.EmailContentBuilder;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+// 1. Boot up the entire application
+@SpringBootTest
+// 2. Give us the MockMvc tool to make HTTP requests
+@AutoConfigureMockMvc
+// 3. Tell Spring to use the "application-test.yml" file we just created
+@ActiveProfiles("test")
+public class OrgChartControllerIntegrationTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    // Notice we inject the REAL repository here, not a mock!
+    @Autowired
+    private EmployeeRepository employeeRepository;
+
+    @BeforeEach
+    public void setupDatabase() {
+        // Clear the H2 database before every test to ensure a clean slate
+        employeeRepository.deleteAll();
+
+        // Insert real test data into the H2 database
+        Employee emp = new Employee();
+        emp.setName("Test Employee");
+        emp.setEmail("test@roima.com");
+        // ... set other necessary fields
+        employeeRepository.save(emp);
+    }
+
+    @Test
+    public void testGetChartByEmail_Integration() throws Exception {
+        // Act & Assert
+        // This request will go through the Controller -> Service -> Repository -> H2 Database
+        mockMvc.perform(get("/org-chart/email/{email}", "test@roima.com")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Org chart fetched"))
+                // Verify the actual data returned from the H2 database
+                .andExpect(jsonPath("$.data.email").value("test@roima.com"));
+    }
+}
+package com.HRMS.HRMS.Controllers.OrgChart;
+
+import com.HRMS.HRMS.dto.OrgChart.OrgChartDto;
 import com.HRMS.HRMS.service.Email.EmailService;
-import jakarta.transaction.Transactional;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
+import com.HRMS.HRMS.service.OrgChart.OrgChartService;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
 
-import java.time.LocalDateTime;
-import java.util.Random;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@Service
-@RequiredArgsConstructor
-@Slf4j
-public class PasswordResetService {
+// 1. @WebMvcTest loads ONLY the web layer (Controllers, Security), not the whole app/database.
+@WebMvcTest(OrgChartController.class)
+public class OrgChartControllerTest {
 
-    private final EmployeeRepository employeeRepository;
-    private final OtpTokenRepository otpTokenRepository;
-    private final EmailContentBuilder emailContentBuilder;
-    private final EmailService emailService;
+    // 2. MockMvc allows us to simulate HTTP requests without starting a real Tomcat server
+    @Autowired
+    private MockMvc mockMvc;
 
-    @Transactional
-    public void generateAndSendOtp(String email) {
-        // 1. Check if email exists in your system
-        Employee employee = employeeRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("No account found with this email address."));
+    // 3. @MockBean creates fake versions of your services and injects them into the Controller
+    @MockBean
+    private OrgChartService orgChartService;
 
-        // 2. Generate a 6-digit OTP
-        String otp = String.format("%06d", new Random().nextInt(999999));
+    @MockBean
+    private EmailService emailService;
 
-        // 3. Delete any existing OTPs for this user so they don't pile up
-        otpTokenRepository.deleteByEmail(email);
-
-        // 4. Save new OTP to database (Valid for 10 minutes)
-        OtpToken otpToken = new OtpToken();
-        otpToken.setEmail(email);
-        otpToken.setOtp(otp);
-        otpToken.setExpiryDate(LocalDateTime.now().plusMinutes(10));
-        otpTokenRepository.save(otpToken);
-
-        // 5. Send the email using your existing Thymeleaf setup
-        sendOtpMail(employee, otp);
-        log.info("OTP generated and sent to {}", email);
-    }
-
-    public boolean verifyOtp(String email, String otp) {
-        // 1. Find the OTP token in the database
-        OtpToken otpToken = otpTokenRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalArgumentException("No OTP found for this email."));
-
-        // 2. Check if the OTP is expired
-        if (otpToken.getExpiryDate().isBefore(LocalDateTime.now())) {
-            otpTokenRepository.delete(otpToken); // Clean it up
-            throw new IllegalArgumentException("OTP has expired. Please request a new one.");
-        }
-
-        // 3. Check if the OTP matches
-        if (!otpToken.getOtp().equals(otp)) {
-            throw new IllegalArgumentException("Invalid OTP.");
-        }
-
-        // 4. If everything is good, we delete the OTP so it can't be reused
-        otpTokenRepository.delete(otpToken);
-        log.info("OTP successfully verified for {}", email);
+    @Test
+    public void testGetChartByEmployeeId_ReturnsOk() throws Exception {
+        // Arrange: Create dummy data
+        Long testId = 1L;
+        OrgChartDto mockDto = new OrgChartDto();
+        // Assume OrgChartDto has a name field. Set dummy data here:
+        // mockDto.setName("Rakesh"); 
         
-        return true;
+        // Arrange: Tell the mock service what to return when called
+        Mockito.when(orgChartService.getOrgChart(testId)).thenReturn(mockDto);
+
+        // Act & Assert: Perform the GET request and verify the response
+        mockMvc.perform(get("/org-chart/id/{employeeId}", testId)
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk()) // Check if HTTP status is 200
+                .andExpect(jsonPath("$.message").value("Org chart fetched")) // Check your ApiResponse message
+                .andExpect(jsonPath("$.data").exists()); // Check that data is present
     }
 
-    private void sendOtpMail(Employee emp, String otp) {
-        // NOTE: Make sure you create a "forgotPassword.html" template in your resources/templates folder!
-        String body = emailContentBuilder.buildEmail("forgotPassword", new OtpEmailDto(
-                emp.getName(), otp
-        ));
-        emailService.sendEmailWithAttachment(
-                new EmailSendingDto(
-                        body, emp.getEmail(), "Your Password Reset OTP", null
-                )
-        );
+    @Test
+    public void testGetChartByEmail_ReturnsOk() throws Exception {
+        // Arrange
+        String testEmail = "test@roima.com";
+        OrgChartDto mockDto = new OrgChartDto();
+        
+        // Tell the mock service to return our mockDto when this specific email is passed
+        Mockito.when(orgChartService.getOrgChartByName(testEmail)).thenReturn(mockDto);
+
+        // Act & Assert
+        mockMvc.perform(get("/org-chart/email/{email}", testEmail)
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Org chart fetched"))
+                .andExpect(jsonPath("$.data").exists());
     }
 }
-package com.HRMS.HRMS.controller;
-
-import com.HRMS.HRMS.dto.AuthDtos.ForgotPasswordRequestDto;
-import com.HRMS.HRMS.dto.AuthDtos.VerifyOtpRequestDto;
-import com.HRMS.HRMS.service.PasswordResetService;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-@RestController
-@RequestMapping("/api/auth")
-@RequiredArgsConstructor
-public class PasswordResetController {
-
-    private final PasswordResetService passwordResetService;
-
-    @PostMapping("/forgot-password")
-    public ResponseEntity<String> forgotPassword(@RequestBody ForgotPasswordRequestDto request) {
-        // If the email doesn't exist, this will throw your ResourceNotFoundException
-        // which your GlobalExceptionHandler will catch and send to the frontend.
-        passwordResetService.generateAndSendOtp(request.getEmail());
-        return ResponseEntity.ok("OTP sent to your email address.");
-    }
-
-    @PostMapping("/verify-otp")
-    public ResponseEntity<String> verifyOtp(@RequestBody VerifyOtpRequestDto request) {
-        // If it fails, it throws an IllegalArgumentException caught by your global handler.
-        passwordResetService.verifyOtp(request.getEmail(), request.getOtp());
-        return ResponseEntity.ok("OTP verified successfully.");
-    }
-}
-import axios from "axios";
-
-// Step 1: Request the OTP
-export const requestPasswordReset = async (email) => {
-  return await axios.post(`/api/auth/forgot-password`, { email });
-};
-
-// Step 2: Verify the OTP
-export const verifyOtp = async (email, otp) => {
-  return await axios.post(`/api/auth/verify-otp`, { email, otp });
-};
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { toast } from "react-toastify";
-import { requestPasswordReset, verifyOtp } from "../../Services/AuthService";
-import { handleGlobalError } from "../../Services/GlobalExceptionService";
-
-function ForgotPassword() {
-  const [step, setStep] = useState(1); // Step 1: Email, Step 2: OTP, Step 3: Reset
-  const [email, setEmail] = useState("");
-  const [otp, setOtp] = useState("");
-  const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
-
-  // Handle Step 1: Sending the email
-  const handleSendOtp = async (e) => {
-    e.preventDefault();
-    if (!email) {
-      toast.warn("Please enter your email address");
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const res = await requestPasswordReset(email);
-      toast.success(res.data || "OTP sent to your email!");
-      setStep(2); // Move to the OTP verification screen
-    } catch (error) {
-      handleGlobalError(error); // This will catch your ResourceNotFoundException
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Handle Step 2: Verifying the OTP
-  const handleVerifyOtp = async (e) => {
-    e.preventDefault();
-    if (!otp || otp.length !== 6) {
-      toast.warn("Please enter a valid 6-digit OTP");
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const res = await verifyOtp(email, otp);
-      toast.success(res.data || "OTP Verified!");
-      
-      // Move to step 3 (You will build the Reset Password form next)
-      setStep(3); 
-    } catch (error) {
-      handleGlobalError(error); // This will catch the expired/invalid OTP exceptions
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
-        
-        {/* Header */}
-        <div className="text-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-800">
-            {step === 1 ? "Forgot Password" : step === 2 ? "Enter OTP" : "Reset Password"}
-          </h2>
-          <p className="text-sm text-gray-500 mt-2">
-            {step === 1
-              ? "Enter your registered email and we'll send you a 6-digit OTP."
-              : step === 2
-              ? `We sent a code to ${email}`
-              : "Create a new, strong password."}
-          </p>
-        </div>
-
-        {/* STEP 1: Email Input Form */}
-        {step === 1 && (
-          <form onSubmit={handleSendOtp} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1 text-gray-700">Email Address</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email..."
-                className="border border-gray-300 rounded px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-black"
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-black text-white font-medium py-2 rounded hover:bg-gray-800 transition disabled:bg-gray-400"
-            >
-              {loading ? "Sending..." : "Send OTP"}
-            </button>
-            <div className="text-center mt-4">
-              <button 
-                type="button" 
-                onClick={() => navigate("/login")} 
-                className="text-sm text-blue-600 hover:underline"
-              >
-                Back to Login
-              </button>
-            </div>
-          </form>
-        )}
-
-        {/* STEP 2: OTP Verification Form */}
-        {step === 2 && (
-          <form onSubmit={handleVerifyOtp} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1 text-gray-700">6-Digit OTP</label>
-              <input
-                type="text"
-                maxLength="6"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, ''))} // Only allow numbers
-                placeholder="------"
-                className="border border-gray-300 rounded px-3 py-2 w-full text-center tracking-widest text-lg focus:outline-none focus:ring-2 focus:ring-black"
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="
