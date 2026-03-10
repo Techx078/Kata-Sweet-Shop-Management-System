@@ -1,322 +1,160 @@
-npm install -D vitest @testing-library/react @testing-library/jest-dom @testing-library/user-event jsdom
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-
-export default defineConfig({
-  plugins: [react()],
-  test: {
-    environment: 'jsdom',
-    globals: true, // Allows you to use describe, it, expect without importing them
-    setupFiles: './src/setupTests.js', // We will create this next
-  }
-})
-Step 3: Create the Setup File
-Create a file named setupTests.js in your src folder. This gives you extra matchers like toBeInTheDocument().
-import '@testing-library/jest-dom';
-
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { vi } from "vitest";
-import Login from "./Login"; // Adjust path if necessary
-import { loginUser } from "../../Services/authService";
-import { handleGlobalError } from "../../Services/GlobalExceptionService";
-
-// --- 1. MOCKING DEPENDENCIES ---
-
-// Mock React Router
-const mockNavigate = vi.fn();
-vi.mock("react-router-dom", () => ({
-  useNavigate: () => mockNavigate,
-}));
-
-// Mock Auth Context
-const mockSetAuthUser = vi.fn();
-vi.mock("../../Contexts/AuthUserContext", () => ({
-  useAuthUserContext: () => ({
-    authUser: null,
-    setAuthUser: mockSetAuthUser,
-  }),
-}));
-
-// Mock API calls
-vi.mock("../../Services/authService", () => ({
-  loginUser: vi.fn(),
-}));
-
-vi.mock("../../Services/GlobalExceptionService", () => ({
-  handleGlobalError: vi.fn(),
-}));
-
-// Mock Toastify
-vi.mock("react-toastify", () => ({
-  toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-  },
-}));
-
-// Mock the Child Component (SendOtp) so it doesn't interfere
-vi.mock("../../Componenets/Auth/SendOtp", () => ({
-  default: () => <div data-testid="mock-send-otp">Mock Send OTP</div>,
-}));
-
-
-// --- 2. THE TEST SUITE ---
-
-describe("Login Component", () => {
-  beforeEach(() => {
-    vi.clearAllMocks(); // Clear history before each test
-    localStorage.clear();
-  });
-
-  it("renders the login form correctly", () => {
-    render(<Login />);
-    
-    // Check if elements are on the screen
-    expect(screen.getByRole("heading", { name: /login/i })).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Enter Registered Email")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Enter password")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Login" })).toBeInTheDocument();
-  });
-
-  it("shows validation errors when submitting empty fields", async () => {
-    render(<Login />);
-    
-    const submitButton = screen.getByRole("button", { name: "Login" });
-    await userEvent.click(submitButton);
-
-    // React Hook Form validation should trigger
-    expect(await screen.findByText("Email is required")).toBeInTheDocument();
-    expect(await screen.findByText("Password is required")).toBeInTheDocument();
-  });
-
-  it("shows validation error for invalid email format", async () => {
-    render(<Login />);
-    
-    const emailInput = screen.getByPlaceholderText("Enter Registered Email");
-    await userEvent.type(emailInput, "invalid-email");
-    
-    const submitButton = screen.getByRole("button", { name: "Login" });
-    await userEvent.click(submitButton);
-
-    expect(await screen.findByText("Invalid email format")).toBeInTheDocument();
-  });
-
-  it("calls loginUser API and navigates on successful login", async () => {
-    // Mock the API resolving successfully
-    const mockResponse = { token: "fake-jwt-token", user: { id: 1, name: "Rakesh" } };
-    loginUser.mockResolvedValueOnce(mockResponse);
-
-    render(<Login />);
-    
-    // Fill the form
-    await userEvent.type(screen.getByPlaceholderText("Enter Registered Email"), "rakesh@roima.com");
-    await userEvent.type(screen.getByPlaceholderText("Enter password"), "password123");
-    
-    // Submit
-    const submitButton = screen.getByRole("button", { name: "Login" });
-    await userEvent.click(submitButton);
-
-    // Wait for async actions to finish and verify
-    await waitFor(() => {
-      expect(loginUser).toHaveBeenCalledWith({
-        email: "rakesh@roima.com",
-        password: "password123",
-      });
-      expect(localStorage.getItem("token")).toBe("fake-jwt-token");
-      expect(mockSetAuthUser).toHaveBeenCalledWith(mockResponse.user);
-      expect(mockNavigate).toHaveBeenCalledWith("/profile/1");
-    });
-  });
-
-  it("calls handleGlobalError when API fails", async () => {
-    // Mock the API rejecting
-    const mockError = new Error("Invalid credentials");
-    loginUser.mockRejectedValueOnce(mockError);
-
-    render(<Login />);
-    
-    await userEvent.type(screen.getByPlaceholderText("Enter Registered Email"), "rakesh@roima.com");
-    await userEvent.type(screen.getByPlaceholderText("Enter password"), "wrongpass");
-    await userEvent.click(screen.getByRole("button", { name: "Login" }));
-
-    await waitFor(() => {
-      expect(handleGlobalError).toHaveBeenCalledWith(mockError);
-    });
-  });
-
-  it("redirects to Google OAuth when Google button is clicked", async () => {
-    // We have to temporarily mock window.location to test the redirect
-    const originalLocation = window.location;
-    delete window.location;
-    window.location = { href: "" };
-
-    render(<Login />);
-    
-    // Find the Google button (it's the button containing the img)
-    const googleButton = screen.getAllByRole("button")[1]; 
-    await userEvent.click(googleButton);
-
-    expect(window.location.href).toBe("http://localhost:8080/oauth2/authorization/google");
-
-    // Restore window.location
-    window.location = originalLocation;
-  });
-});
-"scripts": {
-  "test": "vitest"
-}
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-// Import the actual component and context
-import Login from "./Login";
-// NOTE: Make sure your AuthUserContext file exports the raw Context object 
-// (e.g., export const AuthUserContext = createContext()) so we can provide our own values.
-import { AuthUserContext } from "../../Contexts/AuthUserContext"; 
+import JobReferrals from "./JobReferrals";
+import { useAuthUserContext } from "../../Contexts/AuthUserContext";
+import {
+  getReferralByJobId,
+  getReferralByJobIdAndReferrar,
+  updateJobReferralStatus,
+} from "../../Services/JobReferralService";
 
-// Import the services so we can mock them
-import { loginUser } from "../../Services/authService";
-import { handleGlobalError } from "../../Services/GlobalExceptionService";
+// --- 1. MOCK DEPENDENCIES ---
 
-// --- 1. MOCKING SERVICES & PARTIAL ROUTER ---
-
-// We mock ONLY useNavigate so we can easily check if it was called, 
-// but we keep the rest of react-router-dom intact so <MemoryRouter> works.
-const mockNavigate = vi.fn();
+// Mock React Router to provide a fake jobId in the URL
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual("react-router-dom");
   return {
     ...actual,
-    useNavigate: () => mockNavigate,
+    useParams: () => ({ jobId: "101" }),
   };
 });
 
-vi.mock("../../Services/authService", () => ({
-  loginUser: vi.fn(),
+// Mock the Context
+vi.mock("../../Contexts/AuthUserContext", () => ({
+  useAuthUserContext: vi.fn(),
 }));
 
-vi.mock("../../Services/GlobalExceptionService", () => ({
-  handleGlobalError: vi.fn(),
+// Mock the actual API calls (TanStack Query will call these fakes)
+vi.mock("../../Services/JobReferralService", () => ({
+  getReferralByJobId: vi.fn(),
+  getReferralByJobIdAndReferrar: vi.fn(),
+  updateJobReferralStatus: vi.fn(),
 }));
 
 vi.mock("react-toastify", () => ({
-  toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn()
-  },
-}));
-
-vi.mock("../../Componenets/Auth/SendOtp", () => ({
-  default: () => <div data-testid="mock-send-otp">Mock Send OTP</div>,
+  toast: { success: vi.fn(), warn: vi.fn() },
 }));
 
 // --- 2. THE TEST SUITE ---
 
-describe("Login Component", () => {
+describe("JobReferrals Component - TanStack Query Tests", () => {
   let queryClient;
-  let mockSetAuthUser;
+  let invalidateSpy;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    localStorage.clear();
-    
-    // Create a fresh QueryClient for each test
+
+    // HOW TO TEST QUERY CLIENT (Step 1):
+    // You MUST create a brand new QueryClient for every single test.
+    // If you don't, Test A will cache the data, and Test B will instantly pass 
+    // without making an API call, causing flaky tests.
     queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
+      defaultOptions: {
+        queries: {
+          retry: false, // Disable retries so tests fail instantly on error
+        },
+      },
     });
-    
-    // Create a spy for our Auth Context
-    mockSetAuthUser = vi.fn();
+
+    // HOW TO TEST QUERY CLIENT (Step 2):
+    // We create a "Spy" on the real queryClient's invalidateQueries method.
+    // This allows the real method to run, but tracks exactly what it was called with.
+    invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
   });
 
-  // Helper function to keep our tests clean while manually wrapping
-  const renderLogin = () => {
+  // Helper function to wrap our component with the real QueryClient
+  const renderComponent = () => {
     return render(
       <QueryClientProvider client={queryClient}>
-        <AuthUserContext.Provider value={{ authUser: null, setAuthUser: mockSetAuthUser }}>
-          <MemoryRouter>
-            <Login />
-          </MemoryRouter>
-        </AuthUserContext.Provider>
+        <MemoryRouter>
+          <JobReferrals />
+        </MemoryRouter>
       </QueryClientProvider>
     );
   };
 
-  it("renders the login form correctly", () => {
-    renderLogin();
+  const mockReferralData = {
+    data: [
+      {
+        id: 1,
+        jobTitle: "Java Developer",
+        referrerEmail: "hr@roima.com",
+        candidateName: "John Doe",
+        candidateEmail: "john@example.com",
+        note: "Great candidate",
+        status: "NEW",
+        resumeUrl: "http://resume.com",
+      },
+    ],
+  };
+
+  it("fetches using HR API when user is HR", async () => {
+    // Arrange: Set user as HR and mock the HR API response
+    useAuthUserContext.mockReturnValue({ authUser: { role: "HR" } });
+    getReferralByJobId.mockResolvedValueOnce(mockReferralData);
+
+    // Act
+    renderComponent();
+
+    // Assert: Wait for TanStack Query to finish loading and render the data
+    expect(await screen.findByText("John Doe")).toBeInTheDocument();
     
-    expect(screen.getByRole("heading", { name: /login/i })).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Enter Registered Email")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Enter password")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Login" })).toBeInTheDocument();
+    // Verify TanStack Query called the correct API based on the logic
+    expect(getReferralByJobId).toHaveBeenCalledWith("101");
+    expect(getReferralByJobIdAndReferrar).not.toHaveBeenCalled();
   });
 
-  it("shows validation errors when submitting empty fields", async () => {
-    renderLogin();
-    
-    const submitButton = screen.getByRole("button", { name: "Login" });
-    await userEvent.click(submitButton);
+  it("fetches using Employee API when user is not HR", async () => {
+    // Arrange: Set user as standard employee
+    useAuthUserContext.mockReturnValue({ authUser: { role: "EMPLOYEE" } });
+    getReferralByJobIdAndReferrar.mockResolvedValueOnce(mockReferralData);
 
-    expect(await screen.findByText("Email is required")).toBeInTheDocument();
-    expect(await screen.findByText("Password is required")).toBeInTheDocument();
+    renderComponent();
+
+    // Assert
+    expect(await screen.findByText("John Doe")).toBeInTheDocument();
+    expect(getReferralByJobIdAndReferrar).toHaveBeenCalledWith("101");
+    expect(getReferralByJobId).not.toHaveBeenCalled();
   });
 
-  it("shows validation error for invalid email format", async () => {
-    renderLogin();
-    
-    const emailInput = screen.getByPlaceholderText("Enter Registered Email");
-    await userEvent.type(emailInput, "invalid-email");
-    
-    const submitButton = screen.getByRole("button", { name: "Login" });
-    await userEvent.click(submitButton);
+  it("MAIN QUERY TEST: invalidates query cache after successful status update", async () => {
+    // Arrange: Setup as HR
+    useAuthUserContext.mockReturnValue({ authUser: { role: "HR" } });
+    getReferralByJobId.mockResolvedValueOnce(mockReferralData);
+    updateJobReferralStatus.mockResolvedValueOnce({}); // Mock successful update
 
-    expect(await screen.findByText("Invalid email format")).toBeInTheDocument();
-  });
+    renderComponent();
 
-  it("calls loginUser API and navigates on successful login", async () => {
-    const mockResponse = { token: "fake-jwt-token", user: { id: 1, name: "Rakesh" } };
-    loginUser.mockResolvedValueOnce(mockResponse);
+    // Wait for the list to render
+    expect(await screen.findByText("John Doe")).toBeInTheDocument();
 
-    renderLogin();
-    
-    await userEvent.type(screen.getByPlaceholderText("Enter Registered Email"), "rakesh@roima.com");
-    await userEvent.type(screen.getByPlaceholderText("Enter password"), "password123");
-    
-    const submitButton = screen.getByRole("button", { name: "Login" });
-    await userEvent.click(submitButton);
+    // Act: Click "Change Status" to open the form
+    const changeStatusBtn = screen.getByRole("button", { name: /change status/i });
+    await userEvent.click(changeStatusBtn);
 
+    // Select a new status from the dropdown
+    const select = screen.getByRole("combobox");
+    await userEvent.selectOptions(select, "INTERVIEWING");
+
+    // Click submit
+    const submitBtn = screen.getByRole("button", { name: /submit/i });
+    await userEvent.click(submitBtn);
+
+    // Assert: Wait for the async workflow to complete
     await waitFor(() => {
-      // 1. Check if API was called correctly
-      expect(loginUser).toHaveBeenCalledWith({
-        email: "rakesh@roima.com",
-        password: "password123",
+      // 1. Verify the update API was called with the correct ID and Status
+      expect(updateJobReferralStatus).toHaveBeenCalledWith(1, "INTERVIEWING");
+      
+      // HOW TO TEST QUERY CLIENT (Step 3):
+      // Verify that your component successfully told TanStack Query to throw away 
+      // the old cache and refetch the specific query key!
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["job-referrals", "101"],
       });
-      // 2. Check if token was saved
-      expect(localStorage.getItem("token")).toBe("fake-jwt-token");
-      // 3. Check if our Auth context was updated
-      expect(mockSetAuthUser).toHaveBeenCalledWith(mockResponse.user);
-      // 4. Check if we navigated to the profile page
-      expect(mockNavigate).toHaveBeenCalledWith("/profile/1");
-    });
-  });
-
-  it("calls handleGlobalError when API fails", async () => {
-    const mockError = new Error("Invalid credentials");
-    loginUser.mockRejectedValueOnce(mockError);
-
-    renderLogin();
-    
-    await userEvent.type(screen.getByPlaceholderText("Enter Registered Email"), "rakesh@roima.com");
-    await userEvent.type(screen.getByPlaceholderText("Enter password"), "wrongpass");
-    await userEvent.click(screen.getByRole("button", { name: "Login" }));
-
-    await waitFor(() => {
-      expect(handleGlobalError).toHaveBeenCalledWith(mockError);
     });
   });
 });
