@@ -1,330 +1,322 @@
-package com.HRMS.HRMS.service.OrgChart;
+npm install -D vitest @testing-library/react @testing-library/jest-dom @testing-library/user-event jsdom
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
 
-import com.HRMS.HRMS.dto.OrgChart.OrgChartDto;
-import com.HRMS.HRMS.entity.Employee;
-import com.HRMS.HRMS.exception.ResourceNotFoundException;
-import com.HRMS.HRMS.repository.EmployeeRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Spy;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.modelmapper.ModelMapper;
+export default defineConfig({
+  plugins: [react()],
+  test: {
+    environment: 'jsdom',
+    globals: true, // Allows you to use describe, it, expect without importing them
+    setupFiles: './src/setupTests.js', // We will create this next
+  }
+})
+Step 3: Create the Setup File
+Create a file named setupTests.js in your src folder. This gives you extra matchers like toBeInTheDocument().
+import '@testing-library/jest-dom';
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { vi } from "vitest";
+import Login from "./Login"; // Adjust path if necessary
+import { loginUser } from "../../Services/authService";
+import { handleGlobalError } from "../../Services/GlobalExceptionService";
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+// --- 1. MOCKING DEPENDENCIES ---
 
-// 1. Tell JUnit to use Mockito to handle the @Mock and @InjectMocks annotations
-@ExtendWith(MockitoExtension.class)
-class OrgChartServiceTest {
+// Mock React Router
+const mockNavigate = vi.fn();
+vi.mock("react-router-dom", () => ({
+  useNavigate: () => mockNavigate,
+}));
 
-    // 2. Mock the repository so we don't hit a real database
-    @Mock
-    private EmployeeRepository employeeRepository;
+// Mock Auth Context
+const mockSetAuthUser = vi.fn();
+vi.mock("../../Contexts/AuthUserContext", () => ({
+  useAuthUserContext: () => ({
+    authUser: null,
+    setAuthUser: mockSetAuthUser,
+  }),
+}));
 
-    // 3. We use @Spy instead of @Mock for ModelMapper. 
-    // This allows the real ModelMapper to convert objects normally, saving us from writing dozens of mock rules for it.
-    @Spy
-    private ModelMapper modelMapper = new ModelMapper();
+// Mock API calls
+vi.mock("../../Services/authService", () => ({
+  loginUser: vi.fn(),
+}));
 
-    // 4. Inject the mocks into the service we are testing
-    @InjectMocks
-    private OrgChartService orgChartService;
+vi.mock("../../Services/GlobalExceptionService", () => ({
+  handleGlobalError: vi.fn(),
+}));
 
-    private Employee ceo;
-    private Employee manager;
-    private Employee employee;
+// Mock Toastify
+vi.mock("react-toastify", () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+  },
+}));
 
-    @BeforeEach
-    void setUp() {
-        // Build a fake company hierarchy before each test runs
-        
-        ceo = new Employee();
-        ceo.setId(1L);
-        ceo.setName("CEO John");
-        ceo.setEmail("ceo@roima.com");
-        ceo.setSubordinates(new ArrayList<>());
+// Mock the Child Component (SendOtp) so it doesn't interfere
+vi.mock("../../Componenets/Auth/SendOtp", () => ({
+  default: () => <div data-testid="mock-send-otp">Mock Send OTP</div>,
+}));
 
-        manager = new Employee();
-        manager.setId(2L);
-        manager.setName("Manager Jane");
-        manager.setEmail("jane@roima.com");
-        manager.setManager(ceo); // Link to CEO
-        manager.setSubordinates(new ArrayList<>());
-        ceo.getSubordinates().add(manager);
 
-        employee = new Employee();
-        employee.setId(3L);
-        employee.setName("Employee Rakesh");
-        employee.setEmail("rakesh@roima.com");
-        employee.setManager(manager); // Link to Manager
-        employee.setSubordinates(new ArrayList<>());
-        manager.getSubordinates().add(employee);
-    }
+// --- 2. THE TEST SUITE ---
 
-    // --- Tests for getOrgChart(Long id) ---
+describe("Login Component", () => {
+  beforeEach(() => {
+    vi.clearAllMocks(); // Clear history before each test
+    localStorage.clear();
+  });
 
-    @Test
-    void getOrgChart_WhenEmployeeExists_ReturnsCompleteChart() {
-        // Arrange
-        when(employeeRepository.findById(3L)).thenReturn(Optional.of(employee));
+  it("renders the login form correctly", () => {
+    render(<Login />);
+    
+    // Check if elements are on the screen
+    expect(screen.getByRole("heading", { name: /login/i })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Enter Registered Email")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Enter password")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Login" })).toBeInTheDocument();
+  });
 
-        // Act
-        OrgChartDto result = orgChartService.getOrgChart(3L);
+  it("shows validation errors when submitting empty fields", async () => {
+    render(<Login />);
+    
+    const submitButton = screen.getByRole("button", { name: "Login" });
+    await userEvent.click(submitButton);
 
-        // Assert
-        assertNotNull(result);
-        assertEquals("Employee Rakesh", result.getSelectedEmployee().getName());
-        
-        // Assert Direct Reports (Should be 0 for this leaf employee)
-        assertTrue(result.getDirectReports().isEmpty());
+    // React Hook Form validation should trigger
+    expect(await screen.findByText("Email is required")).toBeInTheDocument();
+    expect(await screen.findByText("Password is required")).toBeInTheDocument();
+  });
 
-        // Assert Path From Root (Should be CEO -> Manager)
-        assertEquals(2, result.getPathFromRoot().size());
-        assertEquals("CEO John", result.getPathFromRoot().get(0).getName());
-        assertEquals("Manager Jane", result.getPathFromRoot().get(1).getName());
-    }
+  it("shows validation error for invalid email format", async () => {
+    render(<Login />);
+    
+    const emailInput = screen.getByPlaceholderText("Enter Registered Email");
+    await userEvent.type(emailInput, "invalid-email");
+    
+    const submitButton = screen.getByRole("button", { name: "Login" });
+    await userEvent.click(submitButton);
 
-    @Test
-    void getOrgChart_WhenEmployeeIsCeo_ReturnsChartWithEmptyAncestors() {
-        // Arrange
-        when(employeeRepository.findById(1L)).thenReturn(Optional.of(ceo));
+    expect(await screen.findByText("Invalid email format")).toBeInTheDocument();
+  });
 
-        // Act
-        OrgChartDto result = orgChartService.getOrgChart(1L);
+  it("calls loginUser API and navigates on successful login", async () => {
+    // Mock the API resolving successfully
+    const mockResponse = { token: "fake-jwt-token", user: { id: 1, name: "Rakesh" } };
+    loginUser.mockResolvedValueOnce(mockResponse);
 
-        // Assert
-        assertEquals("CEO John", result.getSelectedEmployee().getName());
-        
-        // CEO has 1 direct report (Jane)
-        assertEquals(1, result.getDirectReports().size());
-        assertEquals("Manager Jane", result.getDirectReports().get(0).getName());
+    render(<Login />);
+    
+    // Fill the form
+    await userEvent.type(screen.getByPlaceholderText("Enter Registered Email"), "rakesh@roima.com");
+    await userEvent.type(screen.getByPlaceholderText("Enter password"), "password123");
+    
+    // Submit
+    const submitButton = screen.getByRole("button", { name: "Login" });
+    await userEvent.click(submitButton);
 
-        // CEO has no manager, so path from root should be completely empty
-        assertTrue(result.getPathFromRoot().isEmpty());
-    }
+    // Wait for async actions to finish and verify
+    await waitFor(() => {
+      expect(loginUser).toHaveBeenCalledWith({
+        email: "rakesh@roima.com",
+        password: "password123",
+      });
+      expect(localStorage.getItem("token")).toBe("fake-jwt-token");
+      expect(mockSetAuthUser).toHaveBeenCalledWith(mockResponse.user);
+      expect(mockNavigate).toHaveBeenCalledWith("/profile/1");
+    });
+  });
 
-    @Test
-    void getOrgChart_WhenEmployeeNotFound_ThrowsException() {
-        // Arrange
-        when(employeeRepository.findById(99L)).thenReturn(Optional.empty());
+  it("calls handleGlobalError when API fails", async () => {
+    // Mock the API rejecting
+    const mockError = new Error("Invalid credentials");
+    loginUser.mockRejectedValueOnce(mockError);
 
-        // Act & Assert
-        assertThrows(ResourceNotFoundException.class, () -> {
-            orgChartService.getOrgChart(99L);
-        });
-        
-        // Verify that mapping was never attempted
-        verify(modelMapper, never()).map(any(), any());
-    }
+    render(<Login />);
+    
+    await userEvent.type(screen.getByPlaceholderText("Enter Registered Email"), "rakesh@roima.com");
+    await userEvent.type(screen.getByPlaceholderText("Enter password"), "wrongpass");
+    await userEvent.click(screen.getByRole("button", { name: "Login" }));
 
-    // --- Tests for getOrgChartByName(String email) ---
+    await waitFor(() => {
+      expect(handleGlobalError).toHaveBeenCalledWith(mockError);
+    });
+  });
 
-    @Test
-    void getOrgChartByName_WhenEmailExists_ReturnsCompleteChart() {
-        // Arrange
-        when(employeeRepository.findByEmail("jane@roima.com")).thenReturn(Optional.of(manager));
+  it("redirects to Google OAuth when Google button is clicked", async () => {
+    // We have to temporarily mock window.location to test the redirect
+    const originalLocation = window.location;
+    delete window.location;
+    window.location = { href: "" };
 
-        // Act
-        OrgChartDto result = orgChartService.getOrgChartByName("jane@roima.com");
+    render(<Login />);
+    
+    // Find the Google button (it's the button containing the img)
+    const googleButton = screen.getAllByRole("button")[1]; 
+    await userEvent.click(googleButton);
 
-        // Assert
-        assertNotNull(result);
-        assertEquals("Manager Jane", result.getSelectedEmployee().getName());
-        
-        // Jane has 1 report (Rakesh)
-        assertEquals(1, result.getDirectReports().size());
-        assertEquals("Employee Rakesh", result.getDirectReports().get(0).getName());
+    expect(window.location.href).toBe("http://localhost:8080/oauth2/authorization/google");
 
-        // Jane has 1 ancestor (CEO John)
-        assertEquals(1, result.getPathFromRoot().size());
-        assertEquals("CEO John", result.getPathFromRoot().get(0).getName());
-    }
-
-    @Test
-    void getOrgChartByName_WhenEmailNotFound_ThrowsException() {
-        // Arrange
-        when(employeeRepository.findByEmail("unknown@roima.com")).thenReturn(Optional.empty());
-
-        // Act & Assert
-        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
-            orgChartService.getOrgChartByName("unknown@roima.com");
-        });
-        
-        assertEquals("Employee not found", exception.getMessage());
-    }
+    // Restore window.location
+    window.location = originalLocation;
+  });
+});
+"scripts": {
+  "test": "vitest"
 }
-package com.HRMS.HRMS.repository.TravelRepositories;
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-import com.HRMS.HRMS.entity.Employee;
-import com.HRMS.HRMS.entity.TravelEntities.ExpenseType;
-import com.HRMS.HRMS.entity.TravelEntities.Travel;
-import com.HRMS.HRMS.entity.TravelEntities.TravelAssignment;
-import com.HRMS.HRMS.entity.TravelEntities.TravelExpense;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
-import org.springframework.test.context.ActiveProfiles;
+// Import the actual component and context
+import Login from "./Login";
+// NOTE: Make sure your AuthUserContext file exports the raw Context object 
+// (e.g., export const AuthUserContext = createContext()) so we can provide our own values.
+import { AuthUserContext } from "../../Contexts/AuthUserContext"; 
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.List;
+// Import the services so we can mock them
+import { loginUser } from "../../Services/authService";
+import { handleGlobalError } from "../../Services/GlobalExceptionService";
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+// --- 1. MOCKING SERVICES & PARTIAL ROUTER ---
 
-// 1. @DataJpaTest disables full auto-configuration and applies only configuration relevant to JPA tests.
-@DataJpaTest
-@ActiveProfiles("test") // Uses your application-test.properties for H2
-public class TravelExpenseRepositoryTest {
+// We mock ONLY useNavigate so we can easily check if it was called, 
+// but we keep the rest of react-router-dom intact so <MemoryRouter> works.
+const mockNavigate = vi.fn();
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual("react-router-dom");
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  };
+});
 
-    @Autowired
-    private TravelExpenseRepository travelExpenseRepository;
+vi.mock("../../Services/authService", () => ({
+  loginUser: vi.fn(),
+}));
 
-    // 2. TestEntityManager is an alternative to standard JPA EntityManager customized for tests.
-    // It is great for inserting setup data quickly.
-    @Autowired
-    private TestEntityManager entityManager;
+vi.mock("../../Services/GlobalExceptionService", () => ({
+  handleGlobalError: vi.fn(),
+}));
 
-    private Employee employee;
-    private Travel travel;
-    private TravelAssignment assignment;
-    private ExpenseType foodExpenseType;
-    private LocalDate today;
+vi.mock("react-toastify", () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn()
+  },
+}));
 
-    @BeforeEach
-    void setUp() {
-        today = LocalDate.now();
+vi.mock("../../Componenets/Auth/SendOtp", () => ({
+  default: () => <div data-testid="mock-send-otp">Mock Send OTP</div>,
+}));
 
-        // Step 1: Create and persist foundational entities
-        employee = new Employee();
-        employee.setName("Rakesh");
-        employee.setEmail("rakesh@roima.com");
-        entityManager.persist(employee);
+// --- 2. THE TEST SUITE ---
 
-        travel = new Travel();
-        travel.setDestination("Mumbai");
-        entityManager.persist(travel);
+describe("Login Component", () => {
+  let queryClient;
+  let mockSetAuthUser;
 
-        assignment = new TravelAssignment();
-        assignment.setEmployee(employee);
-        assignment.setTravel(travel);
-        entityManager.persist(assignment);
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    
+    // Create a fresh QueryClient for each test
+    queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    
+    // Create a spy for our Auth Context
+    mockSetAuthUser = vi.fn();
+  });
 
-        foodExpenseType = new ExpenseType();
-        // Assuming your ExpenseType has a name field
-        // foodExpenseType.setName("FOOD"); 
-        entityManager.persist(foodExpenseType);
+  // Helper function to keep our tests clean while manually wrapping
+  const renderLogin = () => {
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <AuthUserContext.Provider value={{ authUser: null, setAuthUser: mockSetAuthUser }}>
+          <MemoryRouter>
+            <Login />
+          </MemoryRouter>
+        </AuthUserContext.Provider>
+      </QueryClientProvider>
+    );
+  };
 
-        // Step 2: Create Test Expenses
+  it("renders the login form correctly", () => {
+    renderLogin();
+    
+    expect(screen.getByRole("heading", { name: /login/i })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Enter Registered Email")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Enter password")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Login" })).toBeInTheDocument();
+  });
 
-        // Expense 1: Valid, APPROVED, Food, Today
-        TravelExpense expense1 = new TravelExpense();
-        expense1.setTravelAssignment(assignment);
-        expense1.setExpenseType(foodExpenseType);
-        expense1.setDate(today);
-        expense1.setAmount(new BigDecimal("500.00"));
-        expense1.setStatus("APPROVED"); // Must match your query exactly
-        expense1.setCreatedAt(LocalDateTime.now().minusHours(2)); // Older
-        entityManager.persist(expense1);
+  it("shows validation errors when submitting empty fields", async () => {
+    renderLogin();
+    
+    const submitButton = screen.getByRole("button", { name: "Login" });
+    await userEvent.click(submitButton);
 
-        // Expense 2: Valid, PENDING, Food, Today
-        TravelExpense expense2 = new TravelExpense();
-        expense2.setTravelAssignment(assignment);
-        expense2.setExpenseType(foodExpenseType);
-        expense2.setDate(today);
-        expense2.setAmount(new BigDecimal("300.00"));
-        expense2.setStatus("PENDING");
-        expense2.setCreatedAt(LocalDateTime.now().minusHours(1)); // Newer
-        entityManager.persist(expense2);
+    expect(await screen.findByText("Email is required")).toBeInTheDocument();
+    expect(await screen.findByText("Password is required")).toBeInTheDocument();
+  });
 
-        // Expense 3: REJECTED (Should be ignored by getDailyTotal), Food, Today
-        TravelExpense expense3 = new TravelExpense();
-        expense3.setTravelAssignment(assignment);
-        expense3.setExpenseType(foodExpenseType);
-        expense3.setDate(today);
-        expense3.setAmount(new BigDecimal("1000.00"));
-        expense3.setStatus("REJECTED");
-        expense3.setCreatedAt(LocalDateTime.now()); // Newest
-        entityManager.persist(expense3);
+  it("shows validation error for invalid email format", async () => {
+    renderLogin();
+    
+    const emailInput = screen.getByPlaceholderText("Enter Registered Email");
+    await userEvent.type(emailInput, "invalid-email");
+    
+    const submitButton = screen.getByRole("button", { name: "Login" });
+    await userEvent.click(submitButton);
 
-        // Flush pushes the data to the in-memory database immediately
-        entityManager.flush(); 
-    }
+    expect(await screen.findByText("Invalid email format")).toBeInTheDocument();
+  });
 
-    // --- Tests for getDailyTotal ---
+  it("calls loginUser API and navigates on successful login", async () => {
+    const mockResponse = { token: "fake-jwt-token", user: { id: 1, name: "Rakesh" } };
+    loginUser.mockResolvedValueOnce(mockResponse);
 
-    @Test
-    void getDailyTotal_SumsAmountsExcludingRejected() {
-        // Act: We expect it to sum Expense 1 (500) + Expense 2 (300) = 800. 
-        // Expense 3 is REJECTED, so it should be ignored.
-        BigDecimal dailyTotal = travelExpenseRepository.getDailyTotal(
-                employee.getId(), today, foodExpenseType.getId());
+    renderLogin();
+    
+    await userEvent.type(screen.getByPlaceholderText("Enter Registered Email"), "rakesh@roima.com");
+    await userEvent.type(screen.getByPlaceholderText("Enter password"), "password123");
+    
+    const submitButton = screen.getByRole("button", { name: "Login" });
+    await userEvent.click(submitButton);
 
-        // Assert
-        assertEquals(0, new BigDecimal("800.00").compareTo(dailyTotal));
-    }
+    await waitFor(() => {
+      // 1. Check if API was called correctly
+      expect(loginUser).toHaveBeenCalledWith({
+        email: "rakesh@roima.com",
+        password: "password123",
+      });
+      // 2. Check if token was saved
+      expect(localStorage.getItem("token")).toBe("fake-jwt-token");
+      // 3. Check if our Auth context was updated
+      expect(mockSetAuthUser).toHaveBeenCalledWith(mockResponse.user);
+      // 4. Check if we navigated to the profile page
+      expect(mockNavigate).toHaveBeenCalledWith("/profile/1");
+    });
+  });
 
-    @Test
-    void getDailyTotal_WhenNoRecordsMatch_ReturnsZeroDueToCoalesce() {
-        // Act: Query for tomorrow (where no records exist)
-        BigDecimal dailyTotal = travelExpenseRepository.getDailyTotal(
-                employee.getId(), today.plusDays(1), foodExpenseType.getId());
+  it("calls handleGlobalError when API fails", async () => {
+    const mockError = new Error("Invalid credentials");
+    loginUser.mockRejectedValueOnce(mockError);
 
-        // Assert: Your COALESCE(SUM(e.amount), 0) should catch the null and return 0
-        assertEquals(0, BigDecimal.ZERO.compareTo(dailyTotal));
-    }
+    renderLogin();
+    
+    await userEvent.type(screen.getByPlaceholderText("Enter Registered Email"), "rakesh@roima.com");
+    await userEvent.type(screen.getByPlaceholderText("Enter password"), "wrongpass");
+    await userEvent.click(screen.getByRole("button", { name: "Login" }));
 
-    // --- Tests for getTotalApprovedByTravelId ---
-
-    @Test
-    void getTotalApprovedByTravelId_SumsOnlyApprovedStatus() {
-        // Act: Only Expense 1 is APPROVED (500.00)
-        BigDecimal totalApproved = travelExpenseRepository.getTotalApprovedByTravelId(travel.getId());
-
-        // Assert
-        assertEquals(0, new BigDecimal("500.00").compareTo(totalApproved));
-    }
-
-    // --- Tests for getTotalAmountByAssignmentId ---
-
-    @Test
-    void getTotalAmountByAssignmentId_SumsOnlyApprovedStatus() {
-        // Act: Only Expense 1 is APPROVED (500.00)
-        BigDecimal totalApproved = travelExpenseRepository.getTotalAmountByAssignmentId(assignment.getId());
-
-        // Assert
-        assertEquals(0, new BigDecimal("500.00").compareTo(totalApproved));
-    }
-
-    // --- Tests for findTravelExpenseByTravelAssignment_IdOrderByCreatedAtDesc ---
-
-    @Test
-    void findTravelExpenseByTravelAssignment_IdOrderByCreatedAtDesc_ReturnsCorrectOrder() {
-        // Act
-        List<TravelExpense> expenses = travelExpenseRepository
-                .findTravelExpenseByTravelAssignment_IdOrderByCreatedAtDesc(assignment.getId());
-
-        // Assert
-        assertNotNull(expenses);
-        assertEquals(3, expenses.size());
-
-        // expense3 was created most recently, so it should be first [0]
-        assertEquals("REJECTED", expenses.get(0).getStatus());
-        
-        // expense2 was created 1 hour ago, so it should be second [1]
-        assertEquals("PENDING", expenses.get(1).getStatus());
-        
-        // expense1 was created 2 hours ago, so it should be last [2]
-        assertEquals("APPROVED", expenses.get(2).getStatus());
-    }
-}
+    await waitFor(() => {
+      expect(handleGlobalError).toHaveBeenCalledWith(mockError);
+    });
+  });
+});
